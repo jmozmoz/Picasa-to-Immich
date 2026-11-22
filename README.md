@@ -612,7 +612,20 @@ to the source archive and keeps `test/` and `backup/` out of it. Before
 the first upload, choose a license (see below) and add it to
 `pyproject.toml`.
 
+## AI assistance
+
+This package was implemented with the help of the AI assistants
+ChatGPT (OpenAI) and Claude (Anthropic).
+
 ## License
 
-No license is specified by this script. Add a license file and update
-this section if you intend to distribute it.
+Copyright (C) 2026 the picasa-to-immich authors.
+
+This program is free software: you can redistribute it and/or modify it
+under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or (at your
+option) any later version. See [LICENSE](LICENSE) for the full text.
+
+It is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE.

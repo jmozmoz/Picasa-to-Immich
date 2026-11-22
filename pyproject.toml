@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=64"]
+requires = ["setuptools>=77"]  # 77+ for the SPDX `license` expression
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,6 +7,8 @@ name = "picasa-to-immich"
 dynamic = ["version"]
 description = "Migrate Picasa album memberships to an existing Immich library"
 readme = "README.md"
+license = "AGPL-3.0-or-later"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 dependencies = ["requests>=2.20"]
 keywords = ["picasa", "immich", "photos", "albums", "migration"]
@@ -16,7 +18,6 @@ classifiers = [
     "Operating System :: OS Independent",
     "Topic :: Multimedia :: Graphics",
 ]
-# TODO before publishing: choose a license and add `license = "..."` and a LICENSE file.
 # Optionally add: authors = [{ name = "..." }] and [project.urls] Homepage = "..."
 
 [project.optional-dependencies]
