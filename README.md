@@ -484,7 +484,9 @@ Each migration run folder contains:
   `picasa_migration_metadata.json`    Archived Picasa properties and
                                       album memberships grouped by Immich
                                       asset ID, plus album and folder
-                                      metadata.
+                                      metadata and the face-tag contacts
+                                      (`[Contacts2]` sections: contact
+                                      ID and name).
 
   `migration_report.json`             Run mode, Immich version, match
                                       results, album actions, counts and

@@ -41,6 +41,7 @@ def picasa_tree(tmp_path: Path) -> Path:
     write(root / "2020" / "sub" / ".picasa.ini", "[a.jpg]\nalbums=tok2\n")
     write(
         root / "2021" / ".picasa.ini",
+        "[Contacts2]\nc1=Ann Example;;\n"
         "[.album:tok3]\ndate=2021-01-01\n[v.mp4]\nalbums=tok3,tok1\n[notes.txt]\nalbums=tok3\n",
     )
     return root

@@ -282,10 +282,16 @@ class Migration:
         }
 
     def write_reports(self, matches: MatchResults, report: dict[str, Any]) -> None:
+        """Write the asset mapping, the Picasa metadata archive and the migration report to output."""
         json_write(self.output / "asset_mapping.json", matches.mapping)
         json_write(
             self.output / "picasa_migration_metadata.json",
-            {"assets": matches.archive, "albums": self.library.albums, "folders": self.library.folders},
+            {
+                "assets": matches.archive,
+                "albums": self.library.albums,
+                "folders": self.library.folders,
+                "contacts": self.library.contacts,
+            },
         )
         json_write(self.output / "migration_report.json", report)
 

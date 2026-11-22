@@ -85,6 +85,12 @@ class IniContent:
     images: dict[str, dict[str, str]] = field(default_factory=dict)
     albums: dict[str, dict[str, str]] = field(default_factory=dict)
     folder: dict[str, str] = field(default_factory=dict)
+    contacts: dict[str, str] = field(default_factory=dict)  # contact ID -> raw value
+
+
+# Sections that list the people of Picasa face tags (contact ID = "Name;..."); the
+# faces= property of an image refers to these IDs. Contacts is the older format.
+CONTACT_SECTIONS = ("contacts", "contacts2")
 
 
 class _CaseSensitiveParser(configparser.ConfigParser):
@@ -95,7 +101,7 @@ class _CaseSensitiveParser(configparser.ConfigParser):
 
 
 def parse_ini(path: Path) -> IniContent:
-    """Split one .picasa.ini into image sections, album definitions and folder metadata."""
+    """Split one .picasa.ini into image sections, album definitions, folder metadata and contacts."""
     parser = _CaseSensitiveParser(interpolation=None, strict=False, delimiters=("=",))
     try:
         with path.open("r", encoding="utf-8-sig", errors="replace") as stream:
@@ -111,6 +117,8 @@ def parse_ini(path: Path) -> IniContent:
         if lowered == "picasa":
             # Describes the physical directory, not an image or album.
             content.folder.update(props)
+        elif lowered in CONTACT_SECTIONS:
+            content.contacts.update(props)
         elif lowered.startswith(".album:"):
             token = section.split(":", 1)[1].strip()
             if token:
@@ -126,6 +134,7 @@ class PicasaLibrary:
 
     albums:  token -> {"token", "properties", "sourceIni"}
     folders: folder key -> {"relativePath", "properties", "sourceIni", "dateIso"?}
+    contacts: contact ID -> {"contactId", "name", "value", "sourceIni"} (face-tag people)
     files:   file key (see norm_path) -> {"fileName", "relativePath", "localPath",
              "properties", "sourceIni", "albumTokens"}
     """
@@ -134,6 +143,7 @@ class PicasaLibrary:
     albums: dict[str, dict[str, Any]] = field(default_factory=dict)
     folders: dict[str, dict[str, Any]] = field(default_factory=dict)
     files: dict[str, dict[str, Any]] = field(default_factory=dict)
+    contacts: dict[str, dict[str, Any]] = field(default_factory=dict)
     ini_files: list[Path] = field(default_factory=list)
     warnings: list[dict[str, Any]] = field(default_factory=list)
 
@@ -159,6 +169,13 @@ class PicasaLibrary:
             album["sourceIni"].append(str(ini))
         for filename, props in content.images.items():
             self._add_image(ini, filename, props)
+        source_ini = ini.relative_to(self.root).as_posix()
+        for contact_id, value in content.contacts.items():
+            contact = self.contacts.setdefault(contact_id, {"contactId": contact_id, "sourceIni": []})
+            contact["name"] = value.split(";", 1)[0].strip()
+            contact["value"] = value
+            if source_ini not in contact["sourceIni"]:
+                contact["sourceIni"].append(source_ini)
 
     def _add_folder(self, ini: Path, metadata: dict[str, str]) -> None:
         relative_dir = ini.parent.relative_to(self.root).as_posix()

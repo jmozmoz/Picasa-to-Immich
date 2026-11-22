@@ -22,6 +22,35 @@ def test_parse_ini_splits_sections(tmp_path):
     assert content.images == {"IMG.jpg": {"albums": "abc", "Star": "yes"}}
 
 
+def test_parse_ini_reads_contact_sections_not_as_images(tmp_path):
+    ini = write(
+        tmp_path / ".picasa.ini",
+        "[Contacts2]\nc0ffee0123456789=Ann Example;;\n[contacts]\n0123=Bob;bob@example.org;\n"
+        "[IMG.jpg]\nfaces=rect64(0123456789abcdef),c0ffee0123456789\n",
+    )
+    content = picasa.parse_ini(ini)
+    assert content.contacts == {"c0ffee0123456789": "Ann Example;;", "0123": "Bob;bob@example.org;"}
+    assert list(content.images) == ["IMG.jpg"]
+
+
+def test_scan_collects_contacts_without_missing_file_warnings(tmp_path, caplog):
+    write(tmp_path / "IMG.jpg", b"x")
+    write(tmp_path / ".picasa.ini", "[Contacts2]\nc1=Ann Example;;\n[IMG.jpg]\nfaces=rect64(0),c1\n")
+    write(tmp_path / "sub" / ".picasa.ini", "[Contacts2]\nc1=Ann Example;;\n")
+    library = PicasaLibrary.scan(tmp_path)
+    assert library.contacts == {
+        "c1": {
+            "contactId": "c1",
+            "name": "Ann Example",
+            "value": "Ann Example;;",
+            "sourceIni": [".picasa.ini", "sub/.picasa.ini"],
+        }
+    }
+    assert list(library.files) == ["img.jpg"]
+    library.local_files()
+    assert "not found" not in caplog.text
+
+
 def test_parse_ini_merges_duplicate_sections(tmp_path):
     ini = write(tmp_path / ".picasa.ini", "[a.jpg]\nalbums=x\n[a.jpg]\nrotate=rotate(1)\n")
     assert picasa.parse_ini(ini).images == {"a.jpg": {"albums": "x", "rotate": "rotate(1)"}}

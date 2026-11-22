@@ -81,6 +81,7 @@ def test_output_files(picasa_tree, tmp_path):
     assert asset_a["picasaAlbums"] == [{"token": "tok1", "name": "Holiday 2020"}, {"token": "tok2", "name": "Best of"}]
     assert metadata["assets"]["asset-b"]["picasaAlbums"][1] == {"token": "tokX", "name": "Picasa album tokX"}
     assert set(metadata["albums"]) == {"tok1", "tok2", "tok3"}
+    assert metadata["contacts"]["c1"]["name"] == "Ann Example"
 
     original = output / "original_ini" / "2020" / ".picasa.ini"
     assert original.read_bytes() == (picasa_tree / "2020" / ".picasa.ini").read_bytes()
