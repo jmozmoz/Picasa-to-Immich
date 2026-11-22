@@ -1,12 +1,14 @@
 """Scan Picasa albums or migrate their memberships to Immich.
 
 Use --scan-only to export album membership as source-relative file paths; this
-mode does not connect to Immich and needs no API key or third-party packages.
+mode does not connect to Immich and needs no API key.
 Otherwise, dry-run is the default. Use --apply to create albums / add existing
-assets. Immich mode requires: pip install requests
+assets.
 
-The original .picasa.ini files are copied byte-for-byte to OUTPUT/original_ini.
-All Picasa properties (including unknown ones) are archived in JSON.
+Every run writes to a new folder OUTPUT/<date>T<time>-<scan|dryrun|apply>, so
+earlier reports are never overwritten. In migration mode the original
+.picasa.ini files are copied byte-for-byte to its original_ini subfolder, and
+all Picasa properties (including unknown ones) are archived in JSON.
 """
 
 from __future__ import annotations
@@ -20,6 +22,7 @@ from . import __version__, settings
 from .immich import ImmichAPI
 from .migration import run_migration
 from .scan_report import run_scan_only
+from .util import new_run_dir
 
 LOG = logging.getLogger(__name__)
 
@@ -31,7 +34,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument("source", type=Path, help="Root folder containing Picasa folders and .picasa.ini files")
-    parser.add_argument("--output", type=Path, default=Path("picasa_migration"), help="Output/archive directory")
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path("picasa_migration"),
+        help="Output folder; each run writes to a new timestamped subfolder (default: picasa_migration)",
+    )
     parser.add_argument(
         "--scan-only",
         action="store_true",
@@ -80,7 +88,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.apply:
             parser.error("--apply cannot be combined with --scan-only")
         LOG.info("Scanning Picasa folders (scan-only mode; Immich will not be contacted)")
-        result = run_scan_only(root, output)
+        result = run_scan_only(root, new_run_dir(output, "scan"))
         LOG.info(
             "Found %d .picasa.ini files, %d folder metadata records, %d album definitions, %d image/video sections",
             result["iniFileCount"],
@@ -105,12 +113,13 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--page-size must be positive")
 
     api = ImmichAPI(credentials.url, credentials.api_key, args.timeout, not args.no_verify_tls, debug=args.debug_api)
+    run_dir = new_run_dir(output, "apply" if args.apply else "dryrun")
     report = run_migration(
-        api, root, output, apply=args.apply, allow_name_only=args.allow_name_only, page_size=args.page_size
+        api, root, run_dir, apply=args.apply, allow_name_only=args.allow_name_only, page_size=args.page_size
     )
     LOG.info("Finished in %s mode", "APPLY" if args.apply else "DRY-RUN")
     LOG.info("Summary: %s", json.dumps(report["summary"], ensure_ascii=False))
-    LOG.info("Reports written to %s", output)
+    LOG.info("Reports written to %s", run_dir)
     if not args.apply:
         LOG.info("No Immich changes were made. Review migration_report.json, then rerun with --apply.")
     return 0

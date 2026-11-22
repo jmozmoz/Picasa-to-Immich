@@ -2,7 +2,7 @@
 
 Modules:
     settings     .env file and Immich URL/API-key resolution
-    util         small shared helpers (JSON output, path keys, timestamps)
+    util         small shared helpers (JSON output, run folders, path keys, timestamps)
     picasa       reading .picasa.ini files (no Immich dependency)
     scan_report  scan-only output: album file lists
     matching     matching local files to Immich assets (no network)

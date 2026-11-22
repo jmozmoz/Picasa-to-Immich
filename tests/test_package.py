@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 from picasa_immich import __version__
+from tests.helpers import only_run_dir
 
 PROJECT = Path(__file__).resolve().parent.parent
 
@@ -55,4 +56,4 @@ def test_entry_script_scan_only(picasa_tree, tmp_path):
         check=False,
     )
     assert out.returncode == 0, out.stderr
-    assert (output / "album_file_list.json").is_file()
+    assert (only_run_dir(output, "scan") / "album_file_list.json").is_file()

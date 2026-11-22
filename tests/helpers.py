@@ -28,6 +28,12 @@ def uploaded_asset(asset_id: str, name: str, content: bytes) -> dict[str, Any]:
     return {"id": asset_id, "originalFileName": name, "originalPath": f"/upload/{name}", "checksum": b64_sha1(content)}
 
 
+def only_run_dir(output: Path, mode: str) -> Path:
+    """The single run folder of the given mode that the CLI created in output."""
+    (run_dir,) = output.glob(f"*-{mode}")
+    return run_dir
+
+
 def write(path: Path, text: str | bytes) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     if isinstance(text, bytes):

@@ -105,11 +105,13 @@ picasa-to-immich /path/to/picasa \
     --output picasa_scan
 ```
 
-The default output directory is `picasa_migration`.
+The default output directory is `picasa_migration`. Every run writes to
+a new subfolder of it (see [Output folders](#output-folders)), for
+example `picasa_scan/2026-11-22T140512-scan/`.
 
 ### Scan-only output
 
-The script creates:
+The script creates, in that run folder:
 
 -   `album_file_list.json` --- structured album, folder and warning
     information.
@@ -376,7 +378,9 @@ usage: picasa-to-immich [-h] [--version] [--output OUTPUT] [--scan-only]
                                       the Picasa folder tree and
                                       `.picasa.ini` files.
 
-  `--output OUTPUT`                   Output/archive directory. Default:
+  `--output OUTPUT`                   Output/archive directory. Each run
+                                      writes to a new timestamped
+                                      subfolder. Default:
                                       `picasa_migration`.
 
   `--scan-only`                       Export album file lists only. Does
@@ -426,9 +430,28 @@ usage: picasa-to-immich [-h] [--version] [--output OUTPUT] [--scan-only]
                                       is never logged.
   -----------------------------------------------------------------------
 
+## Output folders
+
+Reports are never overwritten. Each run creates a new subfolder of the
+output directory, named after the start time and the mode:
+
+``` text
+picasa_migration/
+    2026-11-22T140512-scan/      scan-only run
+    2026-11-22T141030-dryrun/    migration without --apply
+    2026-11-22T141502-apply/     migration with --apply
+    2026-11-22T141502-apply-2/   second run in the same second
+```
+
+The log names the folder at the end of each run ("Reports written to
+..."). Sorting the names sorts the runs by time. The `-apply` folders are
+the record of what was changed in Immich: their `migration_report.json`
+lists the albums that were created or extended and the added asset IDs.
+Delete old run folders by hand when you no longer need them.
+
 ## Output files in Immich migration mode
 
-The output directory contains:
+Each migration run folder contains:
 
   -----------------------------------------------------------------------
   File/directory                      Contents
@@ -447,8 +470,9 @@ The output directory contains:
                                       warnings.
 
   `original_ini/`                     Byte-for-byte copies of the
-                                      `.picasa.ini` files, preserving
-                                      their relative directory structure.
+                                      `.picasa.ini` files at the time of
+                                      the run, preserving their relative
+                                      directory structure.
   -----------------------------------------------------------------------
 
 The scan-only mode writes `album_file_list.json` and
@@ -476,7 +500,9 @@ copy the INI files into `original_ini/`.
 
 6.  Only when the report is satisfactory, rerun with `--apply`.
 
-The script writes reports and archives into the output directory. Choose
+The script writes reports and archives into a new run folder in the
+output directory for every run, so the dry-run report of step 5 stays
+next to the apply report of step 6. Choose
 an output directory outside the source tree to keep generated files
 separate from the Picasa collection.
 
@@ -536,7 +562,7 @@ command from a checkout without installing.
 | Module | Contents |
 |---|---|
 | `settings.py` | `.env` reading and the URL/API-key priority |
-| `util.py` | Shared helpers: JSON output, path keys, timestamps |
+| `util.py` | Shared helpers: JSON output, per-run output folders, path keys, timestamps |
 | `picasa.py` | `PicasaLibrary`: reads `.picasa.ini` files; no Immich dependency |
 | `scan_report.py` | Scan-only mode: album file lists |
 | `matching.py` | `AssetIndex` and matching local files to Immich assets; no network |
@@ -558,6 +584,7 @@ python -m pytest
 
 | File | Covers |
 |---|---|
+| `tests/test_util.py` | Per-run output folders |
 | `tests/test_settings.py` | `.env` parsing and the priority of URL/API-key sources |
 | `tests/test_picasa.py` | Reading `.picasa.ini` files |
 | `tests/test_scan_report.py` | Scan-only output |

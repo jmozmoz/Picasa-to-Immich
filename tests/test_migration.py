@@ -5,7 +5,7 @@ import json
 import pytest
 
 from picasa_immich import cli, migration
-from tests.helpers import FakeImmich, external_asset, uploaded_asset
+from tests.helpers import FakeImmich, external_asset, only_run_dir, uploaded_asset
 
 
 def inventory():
@@ -169,7 +169,27 @@ def test_allow_name_only(picasa_tree, tmp_path):
 
 def test_main_scan_only(picasa_tree, tmp_path):
     assert cli.main([str(picasa_tree), "--scan-only", "--output", str(tmp_path / "out")]) == 0
-    assert (tmp_path / "out" / "album_file_list.txt").is_file()
+    assert (only_run_dir(tmp_path / "out", "scan") / "album_file_list.txt").is_file()
+
+
+def test_main_never_overwrites_earlier_runs(picasa_tree, tmp_path, monkeypatch):
+    monkeypatch.setattr(cli, "ImmichAPI", lambda *args, **kwargs: FakeImmich(inventory()))
+    common = [str(picasa_tree), "--output", str(tmp_path / "out"), "--url", "http://x", "--api-key", "k"]
+    for extra in ([], ["--apply"], [], ["--apply"]):
+        assert cli.main(common + extra) == 0
+    runs = sorted(p.name for p in (tmp_path / "out").iterdir())
+    assert len(runs) == 4
+    assert sum(name.endswith("-apply") or "-apply-" in name for name in runs) == 2
+    for run in runs:
+        report = load(tmp_path / "out" / run / "migration_report.json")
+        assert report["mode"] == ("apply" if "-apply" in run else "dry-run")
+        assert (tmp_path / "out" / run / "original_ini" / "2020" / ".picasa.ini").is_file()
+
+
+def test_main_argument_errors_create_no_run_folder(picasa_tree, tmp_path):
+    with pytest.raises(SystemExit):
+        cli.main([str(picasa_tree), "--output", str(tmp_path / "out")])
+    assert not (tmp_path / "out").exists()
 
 
 @pytest.mark.parametrize(
@@ -217,4 +237,4 @@ def test_main_migration_uses_env_file(picasa_tree, tmp_path, monkeypatch):
     )
     assert code == 0
     assert created == {"url": "http://from-file", "api_key": "key", "verify_tls": False, "debug": True}
-    assert load(tmp_path / "out" / "migration_report.json")["mode"] == "dry-run"
+    assert load(only_run_dir(tmp_path / "out", "dryrun") / "migration_report.json")["mode"] == "dry-run"
