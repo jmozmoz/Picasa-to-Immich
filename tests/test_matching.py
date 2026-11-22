@@ -3,7 +3,7 @@ import hashlib
 import pytest
 
 from picasa_immich import matching
-from conftest import b64_sha1, external_asset, uploaded_asset
+from tests.helpers import b64_sha1, external_asset, uploaded_asset
 
 CONTENT = b"local file content"
 SHA1 = hashlib.sha1(CONTENT).hexdigest()
@@ -24,14 +24,17 @@ def test_sha1_file(tmp_path):
     assert matching.sha1_file(path, chunk_size=3) == (SHA1, SIZE)
 
 
-@pytest.mark.parametrize(("asset", "expected"), [
-    ({"fileSize": 5}, 5),
-    ({"originalFileSize": 6.0}, 6),
-    ({"exifInfo": {"fileSizeInByte": 7}}, 7),
-    ({"exifInfo": {"fileSizeInBytes": 8}}, 8),
-    ({"exifInfo": {"fileSizeInByte": None}}, None),
-    ({}, None),
-])
+@pytest.mark.parametrize(
+    ("asset", "expected"),
+    [
+        ({"fileSize": 5}, 5),
+        ({"originalFileSize": 6.0}, 6),
+        ({"exifInfo": {"fileSizeInByte": 7}}, 7),
+        ({"exifInfo": {"fileSizeInBytes": 8}}, 8),
+        ({"exifInfo": {"fileSizeInByte": None}}, None),
+        ({}, None),
+    ],
+)
 def test_remote_size(asset, expected):
     assert matching.remote_size(asset) == expected
 
@@ -59,11 +62,13 @@ def test_checksum_without_original_path_counts_as_content():
 
 def test_match_by_sha1_ignores_filename():
     result = match([uploaded_asset("u", "renamed.jpg", CONTENT)])
+    assert result.asset is not None
     assert (result.status, result.reason, result.asset["id"]) == ("matched", "sha1", "u")
 
 
 def test_match_by_hex_sha1():
     result = match([{"id": "h", "originalFileName": "x.jpg", "checksum": SHA1}])
+    assert result.asset is not None
     assert (result.status, result.asset["id"]) == ("matched", "h")
 
 
@@ -120,6 +125,7 @@ def test_match_local_file_reads_the_file(tmp_path):
     path = tmp_path / "IMG.jpg"
     path.write_bytes(CONTENT)
     result = matching.match_local_file(path, matching.AssetIndex([uploaded_asset("u", "x.jpg", CONTENT)]), False)
+    assert result.asset is not None
     assert result.asset["id"] == "u"
 
 

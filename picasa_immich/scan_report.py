@@ -1,4 +1,5 @@
 """Scan-only mode: Picasa album membership as source-relative file paths."""
+
 from __future__ import annotations
 
 import logging
@@ -12,6 +13,7 @@ LOG = logging.getLogger(__name__)
 
 
 def build_album_file_list(library: PicasaLibrary, local_paths: Mapping[str, Path]) -> dict[str, Any]:
+    """The content of album_file_list.json: each album with its existing and missing files."""
     albums: list[dict[str, Any]] = []
     for token in library.albums:
         files: set[str] = set()
@@ -19,13 +21,15 @@ def build_album_file_list(library: PicasaLibrary, local_paths: Mapping[str, Path
         for key, record in library.files.items():
             if token in record["albumTokens"]:
                 (files if key in local_paths else missing).add(record["relativePath"])
-        albums.append({
-            "token": token,
-            "name": library.album_name(token),
-            "files": sorted(files, key=str.casefold),
-            "missingFiles": sorted(missing, key=str.casefold),
-            "fileCount": len(files),
-        })
+        albums.append(
+            {
+                "token": token,
+                "name": library.album_name(token),
+                "files": sorted(files, key=str.casefold),
+                "missingFiles": sorted(missing, key=str.casefold),
+                "fileCount": len(files),
+            }
+        )
     return {
         "createdAt": timestamp(),
         "source": str(library.root),

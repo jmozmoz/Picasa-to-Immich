@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from picasa_immich import settings
@@ -6,7 +8,7 @@ from picasa_immich import settings
 def test_read_env_file_formats(tmp_path):
     path = tmp_path / ".env"
     path.write_text(
-        "# comment\n\nexport IMMICH_URL=\"http://server:2283\"\n"
+        '# comment\n\nexport IMMICH_URL="http://server:2283"\n'
         "IMMICH_API_KEY='secret'\nPLAIN = value with spaces \nEMPTY=\nURL=a=b\n",
         encoding="utf-8",
     )
@@ -26,7 +28,7 @@ def test_read_env_file_handles_bom(tmp_path):
 
 
 def test_read_env_file_missing_returns_empty(tmp_path):
-    assert settings.read_env_file(tmp_path / "missing.env") == {}
+    assert not settings.read_env_file(tmp_path / "missing.env")
 
 
 @pytest.mark.parametrize("line", ["NO_EQUALS_SIGN", "=value"])
@@ -55,8 +57,9 @@ def test_environment_beats_file(env_file):
 
 
 def test_command_line_beats_environment_and_file(env_file):
-    creds = settings.resolve_credentials("http://cli", "cli-key", env_file,
-                                    environ={"IMMICH_URL": "http://env", "IMMICH_API_KEY": "env-key"})
+    creds = settings.resolve_credentials(
+        "http://cli", "cli-key", env_file, environ={"IMMICH_URL": "http://env", "IMMICH_API_KEY": "env-key"}
+    )
     assert (creds.url, creds.api_key) == ("http://cli", "cli-key")
 
 
@@ -82,15 +85,18 @@ def test_default_env_files_are_cwd_then_config_dir(monkeypatch, tmp_path):
     assert files == [tmp_path / ".env", settings.user_config_dir() / ".env"]
 
 
-@pytest.mark.parametrize(("platform", "environ", "expected"), [
-    ("win32", {"APPDATA": "C:/Users/me/AppData/Roaming"}, "C:/Users/me/AppData/Roaming/picasa-to-immich"),
-    ("win32", {}, "/home/me/AppData/Roaming/picasa-to-immich"),
-    ("darwin", {}, "/home/me/Library/Application Support/picasa-to-immich"),
-    ("linux", {"XDG_CONFIG_HOME": "/xdg"}, "/xdg/picasa-to-immich"),
-    ("linux", {}, "/home/me/.config/picasa-to-immich"),
-])
+@pytest.mark.parametrize(
+    ("platform", "environ", "expected"),
+    [
+        ("win32", {"APPDATA": "C:/Users/me/AppData/Roaming"}, "C:/Users/me/AppData/Roaming/picasa-to-immich"),
+        ("win32", {}, "/home/me/AppData/Roaming/picasa-to-immich"),
+        ("darwin", {}, "/home/me/Library/Application Support/picasa-to-immich"),
+        ("linux", {"XDG_CONFIG_HOME": "/xdg"}, "/xdg/picasa-to-immich"),
+        ("linux", {}, "/home/me/.config/picasa-to-immich"),
+    ],
+)
 def test_user_config_dir(platform, environ, expected):
-    from pathlib import Path
+
     assert settings.user_config_dir(environ, platform, home=Path("/home/me")) == Path(expected)
 
 

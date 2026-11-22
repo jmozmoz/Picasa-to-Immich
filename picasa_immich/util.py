@@ -1,4 +1,5 @@
 """Small helpers shared by several modules."""
+
 from __future__ import annotations
 
 import json

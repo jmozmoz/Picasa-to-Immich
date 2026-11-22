@@ -1,4 +1,5 @@
 """Immich REST API client. Needs the 'requests' package."""
+
 from __future__ import annotations
 
 import json
@@ -20,11 +21,15 @@ class ImmichClient(Protocol):
 
 
 class ImmichAPI:
+    """Client for the Immich REST API (/api), authenticated with an API key."""
+
     def __init__(self, url: str, api_key: str, timeout: int = 60, verify_tls: bool = True, debug: bool = False):
         try:
-            import requests
+            import requests  # pylint: disable=import-outside-toplevel  # optional for --scan-only
         except ImportError as exc:
-            raise RuntimeError("The Immich migration mode requires 'requests'. Install it with: pip install requests") from exc
+            raise RuntimeError(
+                "The Immich migration mode requires 'requests'. Install it with: pip install requests"
+            ) from exc
         self.base = url.rstrip("/") + "/api"
         self.session = requests.Session()
         self.session.headers.update({"x-api-key": api_key, "Accept": "application/json"})
@@ -33,11 +38,20 @@ class ImmichAPI:
         self.debug = debug
 
     def request(self, method: str, endpoint: str, **kwargs: Any) -> Any:
+        """Send one request and return the decoded JSON (or text, or None for an empty response).
+
+        Raises RuntimeError with the server's error details for HTTP errors.
+        """
         url = self.base + "/" + endpoint.lstrip("/")
         if self.debug:
             # Never log the API key: only method, URL, query and JSON body.
-            LOG.info("API -> %s %s params=%s json=%s", method, url,
-                     kwargs.get("params"), json.dumps(kwargs.get("json"), ensure_ascii=False))
+            LOG.info(
+                "API -> %s %s params=%s json=%s",
+                method,
+                url,
+                kwargs.get("params"),
+                json.dumps(kwargs.get("json"), ensure_ascii=False),
+            )
         response = self.session.request(method, url, timeout=self.timeout, **kwargs)
         if self.debug:
             LOG.info("API <- HTTP %s %s (%d bytes)", response.status_code, endpoint, len(response.content))
@@ -47,8 +61,10 @@ class ImmichAPI:
             except ValueError:
                 detail = response.text[:2000]
             correlation = response.headers.get("X-Correlation-ID")
-            raise RuntimeError(f"Immich API {method} {endpoint}: HTTP {response.status_code}: {detail}; "
-                               f"X-Correlation-ID={correlation}")
+            raise RuntimeError(
+                f"Immich API {method} {endpoint}: HTTP {response.status_code}: {detail}; "
+                f"X-Correlation-ID={correlation}"
+            )
         if response.status_code == 204 or not response.content:
             return None
         try:
@@ -60,7 +76,7 @@ class ImmichAPI:
         for endpoint in ("server/version", "server/about"):
             try:
                 value = self.request("GET", endpoint)
-            except Exception:
+            except (RuntimeError, OSError):  # HTTP error or network failure: try the next endpoint
                 continue
             if isinstance(value, dict):
                 return str(value.get("version") or value.get("serverVersion") or value)
@@ -90,7 +106,9 @@ class ImmichAPI:
                 return items, has_more
             if isinstance(candidate.get("assets"), list):
                 return candidate["assets"], bool(candidate.get("hasNextPage", False))
-        raise RuntimeError("Unrecognized /search/metadata response. Inspect the response and adapt pagination before applying.")
+        raise RuntimeError(
+            "Unrecognized /search/metadata response. Inspect the response and adapt pagination before applying."
+        )
 
     @staticmethod
     def _next_cursor(payload: Any) -> str | None:
@@ -120,8 +138,9 @@ class ImmichAPI:
             if not has_more:
                 return
             if not items:
-                raise RuntimeError(f"Search reports more pages but returned no items ({body}); "
-                                   "refusing an incomplete result.")
+                raise RuntimeError(
+                    f"Search reports more pages but returned no items ({body}); " "refusing an incomplete result."
+                )
             page += 1
             if page > 1_000_000:
                 raise RuntimeError("Pagination safety limit reached.")
@@ -136,10 +155,9 @@ class ImmichAPI:
 
     def list_albums(self) -> list[dict[str, Any]]:
         result = self.request("GET", "albums", params={"isOwned": "true"})
-        if isinstance(result, list):
-            return result
-        if isinstance(result, dict) and isinstance(result.get("items"), list):
-            return result["items"]
+        albums = result.get("items") if isinstance(result, dict) else result
+        if isinstance(albums, list):
+            return [album for album in albums if isinstance(album, dict)]
         raise RuntimeError(f"Unexpected GET /albums response: {type(result).__name__}")
 
     def album_asset_ids(self, album_id: str, page_size: int = 1000) -> set[str]:

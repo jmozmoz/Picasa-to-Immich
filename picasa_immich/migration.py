@@ -1,4 +1,5 @@
 """Migration mode: match Picasa files to Immich assets, sync albums, write reports."""
+
 from __future__ import annotations
 
 import logging
@@ -20,9 +21,9 @@ PICASA_EDIT_KEYS = ("backuphash", "rotate", "crop", "filters", "redo")
 
 @dataclass
 class MatchResults:
-    entries: list[dict[str, Any]] = field(default_factory=list)       # migration_report.json "matches"
-    mapping: dict[str, Any] = field(default_factory=dict)             # asset_mapping.json
-    archive: dict[str, Any] = field(default_factory=dict)             # metadata grouped by asset ID
+    entries: list[dict[str, Any]] = field(default_factory=list)  # migration_report.json "matches"
+    mapping: dict[str, Any] = field(default_factory=dict)  # asset_mapping.json
+    archive: dict[str, Any] = field(default_factory=dict)  # metadata grouped by asset ID
     asset_ids_by_token: dict[str, set[str]] = field(default_factory=lambda: defaultdict(set))
     counts: Counter = field(default_factory=Counter)
 
@@ -34,8 +35,16 @@ class Migration:
     changes are only reported.
     """
 
-    def __init__(self, api: ImmichClient, library: PicasaLibrary, output: Path, *,
-                 apply: bool = False, allow_name_only: bool = False, page_size: int = 500):
+    def __init__(
+        self,
+        api: ImmichClient,
+        library: PicasaLibrary,
+        output: Path,
+        *,
+        apply: bool = False,
+        allow_name_only: bool = False,
+        page_size: int = 500,
+    ):
         self.api = api
         self.library = library
         self.output = output
@@ -63,6 +72,7 @@ class Migration:
     # -- matching ------------------------------------------------------------
 
     def match_files(self, local_paths: Mapping[str, Path], index: AssetIndex) -> MatchResults:
+        """Match every Picasa file to an Immich asset and collect the report entries and archive."""
         results = MatchResults()
         for key, record in self.library.files.items():
             base = {"fileName": record["fileName"], "relativePath": record["relativePath"]}
@@ -74,35 +84,61 @@ class Migration:
             match = match_local_file(local_path, index, self.allow_name_only)
             results.counts[match.status] += 1
             if not match.asset:
-                results.entries.append({**base, "localPath": str(local_path), "status": match.status,
-                                        "reason": match.reason,
-                                        "candidateIds": [a.get("id") for a in match.candidates]})
+                results.entries.append(
+                    {
+                        **base,
+                        "localPath": str(local_path),
+                        "status": match.status,
+                        "reason": match.reason,
+                        "candidateIds": [a.get("id") for a in match.candidates],
+                    }
+                )
                 continue
             asset_id = str(match.asset["id"])
-            results.entries.append({**base, "localPath": str(local_path), "immichAssetId": asset_id,
-                                    "status": match.status, "method": match.reason,
-                                    "albumTokens": record["albumTokens"]})
-            results.mapping[key] = {**base, "localPath": str(local_path), "immichAssetId": asset_id,
-                                    "originalFileName": match.asset.get("originalFileName"),
-                                    "matchMethod": match.reason}
+            results.entries.append(
+                {
+                    **base,
+                    "localPath": str(local_path),
+                    "immichAssetId": asset_id,
+                    "status": match.status,
+                    "method": match.reason,
+                    "albumTokens": record["albumTokens"],
+                }
+            )
+            results.mapping[key] = {
+                **base,
+                "localPath": str(local_path),
+                "immichAssetId": asset_id,
+                "originalFileName": match.asset.get("originalFileName"),
+                "matchMethod": match.reason,
+            }
             for token in record["albumTokens"]:
                 results.asset_ids_by_token[token].add(asset_id)
             self._archive_match(results.archive, asset_id, match.asset, local_path, record)
         return results
 
-    def _archive_match(self, archive: dict[str, Any], asset_id: str, asset: Mapping[str, Any],
-                       local_path: Path, record: Mapping[str, Any]) -> None:
+    def _archive_match(
+        self,
+        archive: dict[str, Any],
+        asset_id: str,
+        asset: Mapping[str, Any],
+        local_path: Path,
+        record: Mapping[str, Any],
+    ) -> None:
         """Merge a file's Picasa metadata into its asset record; one asset can have several local paths."""
-        entry = archive.setdefault(asset_id, {
-            "immichAssetId": asset_id,
-            "originalFileName": asset.get("originalFileName"),
-            "localPath": str(local_path),
-            "localPaths": [],
-            "picasa": {"allProperties": {}, "sourceIni": []},
-            "picasaAlbums": [],
-            "immich": {"editsApplied": [], "editsPending": ["rotate", "crop", "filters", "redo"]},
-            "migration": {"status": "preserved", "version": 1},
-        })
+        entry = archive.setdefault(
+            asset_id,
+            {
+                "immichAssetId": asset_id,
+                "originalFileName": asset.get("originalFileName"),
+                "localPath": str(local_path),
+                "localPaths": [],
+                "picasa": {"allProperties": {}, "sourceIni": []},
+                "picasaAlbums": [],
+                "immich": {"editsApplied": [], "editsPending": ["rotate", "crop", "filters", "redo"]},
+                "migration": {"status": "preserved", "version": 1},
+            },
+        )
         if str(local_path) not in entry["localPaths"]:
             entry["localPaths"].append(str(local_path))
         picasa = entry["picasa"]
@@ -117,8 +153,9 @@ class Migration:
 
     # -- albums --------------------------------------------------------------
 
-    def sync_albums(self, asset_ids_by_token: Mapping[str, set[str]],
-                    existing_albums: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    def sync_albums(
+        self, asset_ids_by_token: Mapping[str, set[str]], existing_albums: Iterable[Mapping[str, Any]]
+    ) -> list[dict[str, Any]]:
         """Plan (and with apply=True, perform) album creation and additions.
 
         Every Picasa album definition is reported, even without matched members.
@@ -135,12 +172,23 @@ class Migration:
             name = self.library.album_name(token)
             desired = sorted(asset_ids_by_token.get(token, set()))
             existing = by_name.get(name.casefold(), [])
-            report = {"token": token, "name": name, "picasaProperties": album["properties"],
-                      "matchedAssetCount": len(desired), "action": "existing" if existing else "create",
-                      "addedAssetIds": [], "alreadyPresentAssetCount": 0}
+            report = {
+                "token": token,
+                "name": name,
+                "picasaProperties": album["properties"],
+                "matchedAssetCount": len(desired),
+                "action": "existing" if existing else "create",
+                "addedAssetIds": [],
+                "alreadyPresentAssetCount": 0,
+            }
             if len(existing) > 1:
-                self.warnings.append({"type": "duplicate_immich_album_names", "albumName": name,
-                                      "albumIds": [x.get("id") for x in existing]})
+                self.warnings.append(
+                    {
+                        "type": "duplicate_immich_album_names",
+                        "albumName": name,
+                        "albumIds": [x.get("id") for x in existing],
+                    }
+                )
                 report["action"] = "ambiguous_existing_album"
             elif existing:
                 self._update_existing_album(str(existing[0]["id"]), desired, report)
@@ -152,9 +200,10 @@ class Migration:
     def _update_existing_album(self, album_id: str, desired: list[str], report: dict[str, Any]) -> None:
         try:
             present = self.api.album_asset_ids(album_id, self.page_size)
-        except Exception as exc:
-            self.warnings.append({"type": "album_membership_read_failed", "albumName": report["name"],
-                                  "error": str(exc)})
+        except (RuntimeError, OSError) as exc:  # HTTP error or network failure: skip this album
+            self.warnings.append(
+                {"type": "album_membership_read_failed", "albumName": report["name"], "error": str(exc)}
+            )
             report["action"] = "skipped_membership_read_failed"
             return
         missing = [asset_id for asset_id in desired if asset_id not in present]
@@ -177,8 +226,14 @@ class Migration:
 
     # -- reports -------------------------------------------------------------
 
-    def _report(self, version: str | None, matches: MatchResults, albums: list[dict[str, Any]],
-                local_path_count: int, asset_count: int) -> dict[str, Any]:
+    def _report(
+        self,
+        version: str | None,
+        matches: MatchResults,
+        albums: list[dict[str, Any]],
+        local_path_count: int,
+        asset_count: int,
+    ) -> dict[str, Any]:
         counts = matches.counts
         library = self.library
         return {
@@ -190,30 +245,48 @@ class Migration:
             "albums": albums,
             "warnings": self.warnings,
             "summary": {
-                "iniFiles": len(library.ini_files), "picasaAlbumDefinitions": len(library.albums),
+                "iniFiles": len(library.ini_files),
+                "picasaAlbumDefinitions": len(library.albums),
                 "picasaImageSections": len(library.files),
-                "distinctLocalImagePaths": local_path_count, "immichAssetsScanned": asset_count,
+                "distinctLocalImagePaths": local_path_count,
+                "immichAssetsScanned": asset_count,
                 "matchedAssets": counts["matched"] + counts["matched_low_confidence"],
-                "highConfidenceMatches": counts["matched"], "lowConfidenceMatches": counts["matched_low_confidence"],
-                "unmatched": counts["unmatched"], "ambiguous": counts["ambiguous"],
+                "highConfidenceMatches": counts["matched"],
+                "lowConfidenceMatches": counts["matched_low_confidence"],
+                "unmatched": counts["unmatched"],
+                "ambiguous": counts["ambiguous"],
                 "albumsProcessed": len(albums),
             },
         }
 
     def write_reports(self, matches: MatchResults, report: dict[str, Any]) -> None:
         json_write(self.output / "asset_mapping.json", matches.mapping)
-        json_write(self.output / "picasa_migration_metadata.json",
-                   {"assets": matches.archive, "albums": self.library.albums, "folders": self.library.folders})
+        json_write(
+            self.output / "picasa_migration_metadata.json",
+            {"assets": matches.archive, "albums": self.library.albums, "folders": self.library.folders},
+        )
         json_write(self.output / "migration_report.json", report)
 
 
-def run_migration(api: ImmichClient, root: Path, output: Path, *, apply: bool = False,
-                  allow_name_only: bool = False, page_size: int = 500) -> dict[str, Any]:
+def run_migration(
+    api: ImmichClient,
+    root: Path,
+    output: Path,
+    *,
+    apply: bool = False,
+    allow_name_only: bool = False,
+    page_size: int = 500,
+) -> dict[str, Any]:
     """Scan root, archive the original INI files and run a Migration."""
     LOG.info("Scanning Picasa metadata under %s", root)
     library = PicasaLibrary.scan(root)
     library.copy_original_ini(output)
-    LOG.info("Found %d .picasa.ini files, %d folder metadata records, %d album definitions, %d image/video sections",
-             len(library.ini_files), len(library.folders), len(library.albums), len(library.files))
+    LOG.info(
+        "Found %d .picasa.ini files, %d folder metadata records, %d album definitions, %d image/video sections",
+        len(library.ini_files),
+        len(library.folders),
+        len(library.albums),
+        len(library.files),
+    )
     migration = Migration(api, library, output, apply=apply, allow_name_only=allow_name_only, page_size=page_size)
     return migration.run()

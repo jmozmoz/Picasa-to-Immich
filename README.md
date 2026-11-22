@@ -563,9 +563,39 @@ python -m pytest
 | `tests/test_immich_api.py` | API response parsing and pagination |
 | `tests/test_migration.py` | Dry run, `--apply` and the command line, end to end |
 | `tests/test_package.py` | Module independence and the entry script |
+| `tests/test_code_style.py` | black, pylint, mypy and pyright (see below) |
+
+Shared fixtures are in `tests/conftest.py`; the fake Immich server and
+other helpers are in `tests/helpers.py`.
 
 The `test/` directory (singular) holds example output from a real run
 and is not part of the test suite.
+
+### Code style
+
+`tests/test_code_style.py` runs four tools as part of the test suite.
+Their settings are in `pyproject.toml`:
+
+| Tool | Checks |
+|---|---|
+| [black](https://black.readthedocs.io) | Formatting, line length 120 |
+| [pylint](https://pylint.readthedocs.io) | Code quality; the package and the tests are checked separately |
+| [mypy](https://mypy.readthedocs.io) | Types; the package must be fully annotated |
+| [pyright](https://microsoft.github.io/pyright) | Types, standard mode |
+
+``` bash
+python -m pip install -e ".[test,lint]"
+python -m pytest                  # everything, including the style checks
+python -m pytest -m style         # only the style checks
+python -m pytest -m "not style"   # skip them (they take ~15 s)
+python -m black picasa_immich tests picasa_to_immich.py   # fix formatting
+```
+
+A style check is skipped, not failed, when its tool is not installed.
+pyright downloads Node.js on its first run. For pylint, the tests use a
+few extra exceptions that suit pytest code (no docstrings needed,
+fixtures as arguments, fakes with unused arguments); see
+`PYLINT_TEST_DISABLES` in `tests/test_code_style.py`.
 
 ### Building and publishing
 

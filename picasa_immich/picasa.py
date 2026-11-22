@@ -1,4 +1,5 @@
 """Reading Picasa metadata (.picasa.ini files). Has no Immich dependency."""
+
 from __future__ import annotations
 
 import configparser
@@ -14,12 +15,53 @@ from .util import norm_path
 LOG = logging.getLogger(__name__)
 
 IMAGE_VIDEO_EXTENSIONS = {
-    ".jpg", ".jpeg", ".jpe", ".png", ".gif", ".bmp", ".tif", ".tiff",
-    ".webp", ".heic", ".heif", ".avif", ".dng", ".raw", ".cr2", ".cr3",
-    ".nef", ".nrw", ".arw", ".srf", ".sr2", ".orf", ".rw2", ".pef",
-    ".raf", ".3fr", ".fff", ".iiq", ".k25", ".kdc", ".mrw", ".rwl",
-    ".x3f", ".mp4", ".mov", ".m4v", ".avi", ".mkv", ".wmv", ".mpg",
-    ".mpeg", ".3gp", ".mts", ".m2ts", ".webm", ".vob", ".ogv",
+    ".jpg",
+    ".jpeg",
+    ".jpe",
+    ".png",
+    ".gif",
+    ".bmp",
+    ".tif",
+    ".tiff",
+    ".webp",
+    ".heic",
+    ".heif",
+    ".avif",
+    ".dng",
+    ".raw",
+    ".cr2",
+    ".cr3",
+    ".nef",
+    ".nrw",
+    ".arw",
+    ".srf",
+    ".sr2",
+    ".orf",
+    ".rw2",
+    ".pef",
+    ".raf",
+    ".3fr",
+    ".fff",
+    ".iiq",
+    ".k25",
+    ".kdc",
+    ".mrw",
+    ".rwl",
+    ".x3f",
+    ".mp4",
+    ".mov",
+    ".m4v",
+    ".avi",
+    ".mkv",
+    ".wmv",
+    ".mpg",
+    ".mpeg",
+    ".3gp",
+    ".mts",
+    ".m2ts",
+    ".webm",
+    ".vob",
+    ".ogv",
 }
 PICASA_EPOCH = datetime(1899, 12, 30)
 INI_NAME = ".picasa.ini"
@@ -45,10 +87,16 @@ class IniContent:
     folder: dict[str, str] = field(default_factory=dict)
 
 
+class _CaseSensitiveParser(configparser.ConfigParser):
+    """ConfigParser that keeps property names as written (the default lowercases them)."""
+
+    def optionxform(self, optionstr: str) -> str:
+        return optionstr
+
+
 def parse_ini(path: Path) -> IniContent:
     """Split one .picasa.ini into image sections, album definitions and folder metadata."""
-    parser = configparser.ConfigParser(interpolation=None, strict=False, delimiters=("=",))
-    parser.optionxform = str  # keep property names case-sensitive
+    parser = _CaseSensitiveParser(interpolation=None, strict=False, delimiters=("=",))
     try:
         with path.open("r", encoding="utf-8-sig", errors="replace") as stream:
             parser.read_file(stream)
@@ -81,6 +129,7 @@ class PicasaLibrary:
     files:   file key (see norm_path) -> {"fileName", "relativePath", "localPath",
              "properties", "sourceIni", "albumTokens"}
     """
+
     root: Path
     albums: dict[str, dict[str, Any]] = field(default_factory=dict)
     folders: dict[str, dict[str, Any]] = field(default_factory=dict)
@@ -113,11 +162,14 @@ class PicasaLibrary:
 
     def _add_folder(self, ini: Path, metadata: dict[str, str]) -> None:
         relative_dir = ini.parent.relative_to(self.root).as_posix()
-        folder = self.folders.setdefault(norm_path(relative_dir or "."), {
-            "relativePath": relative_dir if relative_dir != "." else "",
-            "properties": {},
-            "sourceIni": [],
-        })
+        folder = self.folders.setdefault(
+            norm_path(relative_dir or "."),
+            {
+                "relativePath": relative_dir if relative_dir != "." else "",
+                "properties": {},
+                "sourceIni": [],
+            },
+        )
         folder["properties"].update(metadata)
         source_ini = ini.relative_to(self.root).as_posix()
         if source_ini not in folder["sourceIni"]:
@@ -127,12 +179,14 @@ class PicasaLibrary:
             try:
                 folder["dateIso"] = picasa_date_to_iso(raw_date)
             except (ValueError, OverflowError):
-                self.warnings.append({
-                    "type": "invalid_picasa_folder_date",
-                    "relativePath": folder["relativePath"],
-                    "value": raw_date,
-                    "sourceIni": source_ini,
-                })
+                self.warnings.append(
+                    {
+                        "type": "invalid_picasa_folder_date",
+                        "relativePath": folder["relativePath"],
+                        "value": raw_date,
+                        "sourceIni": source_ini,
+                    }
+                )
 
     def _add_image(self, ini: Path, filename: str, props: dict[str, str]) -> None:
         # Image-section names are relative to the directory containing the INI.
@@ -141,20 +195,25 @@ class PicasaLibrary:
         try:
             relative_path = local_path.relative_to(self.root)
         except ValueError:
-            self.warnings.append({
-                "type": "image_path_outside_source",
-                "fileName": filename,
-                "sourceIni": str(ini),
-                "resolvedPath": str(local_path),
-            })
+            self.warnings.append(
+                {
+                    "type": "image_path_outside_source",
+                    "fileName": filename,
+                    "sourceIni": str(ini),
+                    "resolvedPath": str(local_path),
+                }
+            )
             return
-        record = self.files.setdefault(norm_path(relative_path), {
-            "fileName": filename,
-            "relativePath": relative_path.as_posix(),
-            "localPath": str(local_path),
-            "properties": {},
-            "sourceIni": [],
-        })
+        record = self.files.setdefault(
+            norm_path(relative_path),
+            {
+                "fileName": filename,
+                "relativePath": relative_path.as_posix(),
+                "localPath": str(local_path),
+                "properties": {},
+                "sourceIni": [],
+            },
+        )
         record["properties"].update(props)
         if str(ini) not in record["sourceIni"]:
             record["sourceIni"].append(str(ini))
@@ -166,12 +225,14 @@ class PicasaLibrary:
             record["albumTokens"] = tokens
             for token in tokens:
                 if token not in self.albums:
-                    self.warnings.append({
-                        "type": "undefined_album_token",
-                        "fileName": record["fileName"],
-                        "relativePath": record["relativePath"],
-                        "token": token,
-                    })
+                    self.warnings.append(
+                        {
+                            "type": "undefined_album_token",
+                            "fileName": record["fileName"],
+                            "relativePath": record["relativePath"],
+                            "token": token,
+                        }
+                    )
 
     # -- queries -------------------------------------------------------------
 

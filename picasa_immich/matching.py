@@ -1,4 +1,5 @@
 """Matching local files to Immich assets. Pure logic, no network access."""
+
 from __future__ import annotations
 
 import base64
@@ -26,6 +27,7 @@ def checksum_forms(hex_digest: str) -> set[str]:
 
 
 def remote_size(asset: Mapping[str, Any]) -> int | None:
+    """File size in bytes reported by Immich, from the asset or its EXIF data; None if unknown."""
     for key in ("fileSize", "originalFileSize", "size"):
         value = asset.get(key)
         if isinstance(value, (int, float)):
@@ -104,7 +106,9 @@ class Match:
     reason: str = ""
 
 
-def match_asset(local_sha1: str, local_size: int, filename: str, index: AssetIndex, allow_name_only: bool) -> Match:
+def match_asset(  # pylint: disable=too-many-return-statements  # one return per decision
+    local_sha1: str, local_size: int, filename: str, index: AssetIndex, allow_name_only: bool
+) -> Match:
     """Match one local file (by its SHA-1, size and name) against the Immich inventory."""
     local_checksums = checksum_forms(local_sha1)
     # SHA-1 is authoritative when the server provides a content checksum.
@@ -122,8 +126,11 @@ def match_asset(local_sha1: str, local_size: int, filename: str, index: AssetInd
 
     size_matches = [a for a in same_name if remote_size(a) == local_size]
     if len(size_matches) == 1:
-        reason = ("filename_and_size_path_based_server_checksum" if is_path_based_checksum(size_matches[0])
-                  else "filename_and_size_no_server_checksum")
+        reason = (
+            "filename_and_size_path_based_server_checksum"
+            if is_path_based_checksum(size_matches[0])
+            else "filename_and_size_no_server_checksum"
+        )
         return Match("matched", size_matches[0], reason=reason)
     if len(size_matches) > 1:
         return Match("ambiguous", candidates=size_matches, reason="multiple_filename_size_matches")

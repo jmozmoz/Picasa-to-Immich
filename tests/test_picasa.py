@@ -3,16 +3,19 @@ import pytest
 from picasa_immich import picasa
 from picasa_immich.picasa import PicasaLibrary
 from picasa_immich.util import norm_path
-from conftest import write
+from tests.helpers import write
 
 
 def test_parse_ini_splits_sections(tmp_path):
-    ini = write(tmp_path / ".picasa.ini", (
-        "[Picasa]\nname=Folder\n"
-        "[.album:abc]\nname=Trip\nCustomProp=Keep\n"
-        "[.album: ]\nname=no token\n"
-        "[IMG.jpg]\nalbums=abc\nStar=yes\n"
-    ))
+    ini = write(
+        tmp_path / ".picasa.ini",
+        (
+            "[Picasa]\nname=Folder\n"
+            "[.album:abc]\nname=Trip\nCustomProp=Keep\n"
+            "[.album: ]\nname=no token\n"
+            "[IMG.jpg]\nalbums=abc\nStar=yes\n"
+        ),
+    )
     content = picasa.parse_ini(ini)
     assert content.folder == {"name": "Folder"}
     assert content.albums == {"abc": {"name": "Trip", "CustomProp": "Keep"}}
@@ -29,10 +32,13 @@ def test_parse_ini_tolerates_broken_file(tmp_path):
     assert picasa.parse_ini(ini) == picasa.IniContent()
 
 
-@pytest.mark.parametrize(("raw", "expected"), [
-    ("0", "1899-12-30 00:00:00"),
-    ("43831.980718", "2020-01-01 23:32:14"),
-])
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("0", "1899-12-30 00:00:00"),
+        ("43831.980718", "2020-01-01 23:32:14"),
+    ],
+)
 def test_picasa_date_to_iso(raw, expected):
     assert picasa.picasa_date_to_iso(raw) == expected
 
@@ -42,11 +48,14 @@ def test_picasa_date_to_iso_rejects_text():
         picasa.picasa_date_to_iso("yesterday")
 
 
-@pytest.mark.parametrize(("props", "expected"), [
-    ({"name": "  Trip  "}, "Trip"),
-    ({"name": ""}, "Picasa album tok"),
-    ({}, "Picasa album tok"),
-])
+@pytest.mark.parametrize(
+    ("props", "expected"),
+    [
+        ({"name": "  Trip  "}, "Trip"),
+        ({"name": ""}, "Picasa album tok"),
+        ({}, "Picasa album tok"),
+    ],
+)
 def test_album_display_name(props, expected):
     assert picasa.album_display_name("tok", props) == expected
 
@@ -74,8 +83,9 @@ def test_scan_picasa(picasa_tree):
     assert folder["dateIso"] == "2020-01-01 23:32:14"
     assert folder["sourceIni"] == ["2020/.picasa.ini"]
 
-    assert data.warnings == [{"type": "undefined_album_token", "fileName": "b.jpg",
-                              "relativePath": "2020/b.jpg", "token": "tokX"}]
+    assert data.warnings == [
+        {"type": "undefined_album_token", "fileName": "b.jpg", "relativePath": "2020/b.jpg", "token": "tokX"}
+    ]
 
 
 def test_scan_picasa_warns_about_bad_date_and_outside_paths(tmp_path):
@@ -83,7 +93,7 @@ def test_scan_picasa_warns_about_bad_date_and_outside_paths(tmp_path):
     write(root / "x" / ".picasa.ini", "[Picasa]\ndate=soon\n[../../escape.jpg]\nalbums=a\n")
     data = PicasaLibrary.scan(root)
     assert [w["type"] for w in data.warnings] == ["invalid_picasa_folder_date", "image_path_outside_source"]
-    assert data.files == {}
+    assert not data.files
     assert "dateIso" not in data.folders["x"]
 
 
@@ -111,8 +121,9 @@ def test_album_name_for_defined_and_undefined_tokens(picasa_tree):
 def test_copy_original_ini_keeps_layout_and_bytes(picasa_tree, tmp_path):
     library = PicasaLibrary.scan(picasa_tree)
     library.copy_original_ini(tmp_path / "out")
-    copies = sorted(p.relative_to(tmp_path / "out" / "original_ini").as_posix()
-                    for p in (tmp_path / "out").rglob(".picasa.ini"))
+    copies = sorted(
+        p.relative_to(tmp_path / "out" / "original_ini").as_posix() for p in (tmp_path / "out").rglob(".picasa.ini")
+    )
     assert copies == ["2020/.picasa.ini", "2020/sub/.picasa.ini", "2021/.picasa.ini"]
     sub = tmp_path / "out" / "original_ini" / "2020" / "sub" / ".picasa.ini"
     assert sub.read_bytes() == (picasa_tree / "2020" / "sub" / ".picasa.ini").read_bytes()

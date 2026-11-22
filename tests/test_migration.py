@@ -1,10 +1,11 @@
 """End-to-end tests of migration mode and the command line, using a fake Immich."""
+
 import json
 
 import pytest
 
 from picasa_immich import cli, migration
-from conftest import FakeImmich, external_asset, uploaded_asset
+from tests.helpers import FakeImmich, external_asset, uploaded_asset
 
 
 def inventory():
@@ -24,12 +25,13 @@ def load(path):
 
 
 def test_dry_run_reports_without_changes(picasa_tree, tmp_path):
-    api = FakeImmich(inventory(), albums=[{"id": "alb-best", "albumName": "best OF"}],
-                     members={"alb-best": {"asset-a"}})
+    api = FakeImmich(
+        inventory(), albums=[{"id": "alb-best", "albumName": "best OF"}], members={"alb-best": {"asset-a"}}
+    )
     output = tmp_path / "out"
     report = migration.run_migration(api, picasa_tree, output)
 
-    assert api.created == [] and api.added == []
+    assert not api.created and not api.added
     assert report["mode"] == "dry-run"
     statuses = {m["relativePath"]: (m["status"], m.get("reason") or m.get("method")) for m in report["matches"]}
     assert statuses == {
@@ -48,9 +50,16 @@ def test_dry_run_reports_without_changes(picasa_tree, tmp_path):
     assert (albums["tok3"]["name"], albums["tok3"]["matchedAssetCount"]) == ("Picasa album tok3", 0)
 
     assert report["summary"] == {
-        "iniFiles": 3, "picasaAlbumDefinitions": 3, "picasaImageSections": 6,
-        "distinctLocalImagePaths": 4, "immichAssetsScanned": 5, "matchedAssets": 3,
-        "highConfidenceMatches": 3, "lowConfidenceMatches": 0, "unmatched": 2, "ambiguous": 1,
+        "iniFiles": 3,
+        "picasaAlbumDefinitions": 3,
+        "picasaImageSections": 6,
+        "distinctLocalImagePaths": 4,
+        "immichAssetsScanned": 5,
+        "matchedAssets": 3,
+        "highConfidenceMatches": 3,
+        "lowConfidenceMatches": 0,
+        "unmatched": 2,
+        "ambiguous": 1,
         "albumsProcessed": 3,
     }
     assert [w["type"] for w in report["warnings"]] == ["undefined_album_token"]
@@ -68,8 +77,7 @@ def test_output_files(picasa_tree, tmp_path):
     metadata = load(output / "picasa_migration_metadata.json")
     asset_a = metadata["assets"]["asset-a"]
     assert asset_a["picasa"]["rotate"] == "rotate(1)"
-    assert asset_a["picasaAlbums"] == [{"token": "tok1", "name": "Holiday 2020"},
-                                       {"token": "tok2", "name": "Best of"}]
+    assert asset_a["picasaAlbums"] == [{"token": "tok1", "name": "Holiday 2020"}, {"token": "tok2", "name": "Best of"}]
     assert metadata["assets"]["asset-b"]["picasaAlbums"][1] == {"token": "tokX", "name": "Picasa album tokX"}
     assert set(metadata["albums"]) == {"tok1", "tok2", "tok3"}
 
@@ -83,7 +91,8 @@ def test_one_asset_referenced_by_several_local_files(tmp_path):
         (root / folder).mkdir(parents=True)
         (root / folder / "same.jpg").write_bytes(b"identical")
         (root / folder / ".picasa.ini").write_text(
-            f"[.album:{token}]\nname=Album {token}\n[same.jpg]\nalbums={token}\n", encoding="utf-8")
+            f"[.album:{token}]\nname=Album {token}\n[same.jpg]\nalbums={token}\n", encoding="utf-8"
+        )
     api = FakeImmich([uploaded_asset("one", "same.jpg", b"identical")])
     output = tmp_path / "out"
     migration.run_migration(api, root, output, apply=True)
@@ -106,31 +115,40 @@ def test_apply_creates_and_updates_albums(picasa_tree, tmp_path):
 
 
 def test_complete_album_is_left_alone(picasa_tree, tmp_path):
-    api = FakeImmich(inventory(), albums=[{"id": "alb", "albumName": "Best of"}],
-                     members={"alb": {"asset-a", "asset-sub-a"}})
+    api = FakeImmich(
+        inventory(), albums=[{"id": "alb", "albumName": "Best of"}], members={"alb": {"asset-a", "asset-sub-a"}}
+    )
     report = migration.run_migration(api, picasa_tree, tmp_path / "out", apply=True)
-    assert api.added == []
+    assert not api.added
     assert report["albums"][1]["action"] == "already_complete"
 
 
 def test_duplicate_and_unreadable_albums_are_skipped(picasa_tree, tmp_path):
-    api = FakeImmich(inventory(),
-                     albums=[{"id": "d1", "albumName": "Holiday 2020"}, {"id": "d2", "albumName": "Holiday 2020"},
-                             {"id": "bad", "albumName": "Best of"}],
-                     failing_albums={"bad"})
+    api = FakeImmich(
+        inventory(),
+        albums=[
+            {"id": "d1", "albumName": "Holiday 2020"},
+            {"id": "d2", "albumName": "Holiday 2020"},
+            {"id": "bad", "albumName": "Best of"},
+        ],
+        failing_albums={"bad"},
+    )
     report = migration.run_migration(api, picasa_tree, tmp_path / "out", apply=True)
 
     actions = {a["token"]: a["action"] for a in report["albums"]}
     assert actions["tok1"] == "ambiguous_existing_album"
     assert actions["tok2"] == "skipped_membership_read_failed"
-    assert api.added == [] and api.created == [("Picasa album tok3", [])]
+    assert not api.added and api.created == [("Picasa album tok3", [])]
     assert {w["type"] for w in report["warnings"]} == {
-        "undefined_album_token", "duplicate_immich_album_names", "album_membership_read_failed"}
+        "undefined_album_token",
+        "duplicate_immich_album_names",
+        "album_membership_read_failed",
+    }
 
 
-def test_create_album_without_id_is_an_error(picasa_tree, tmp_path):
+def test_create_album_without_id_is_an_error(picasa_tree, tmp_path, monkeypatch):
     api = FakeImmich(inventory())
-    api.create_album = lambda name, ids: {}
+    monkeypatch.setattr(api, "create_album", lambda name, asset_ids: {})
     with pytest.raises(RuntimeError, match="did not contain an id"):
         migration.run_migration(api, picasa_tree, tmp_path / "out", apply=True)
 
@@ -148,17 +166,21 @@ def test_allow_name_only(picasa_tree, tmp_path):
 # Command line
 # --------------------------------------------------------------------------- #
 
+
 def test_main_scan_only(picasa_tree, tmp_path):
     assert cli.main([str(picasa_tree), "--scan-only", "--output", str(tmp_path / "out")]) == 0
     assert (tmp_path / "out" / "album_file_list.txt").is_file()
 
 
-@pytest.mark.parametrize(("args", "message"), [
-    (["--scan-only", "--apply"], "--apply cannot be combined"),
-    ([], "Set --url and --api-key"),
-    (["--url", "http://x", "--api-key", "k", "--page-size", "0"], "--page-size must be positive"),
-    (["--env-file", "missing.env"], "--env-file not found"),
-])
+@pytest.mark.parametrize(
+    ("args", "message"),
+    [
+        (["--scan-only", "--apply"], "--apply cannot be combined"),
+        ([], "Set --url and --api-key"),
+        (["--url", "http://x", "--api-key", "k", "--page-size", "0"], "--page-size must be positive"),
+        (["--env-file", "missing.env"], "--env-file not found"),
+    ],
+)
 def test_main_argument_errors(picasa_tree, tmp_path, capsys, args, message):
     with pytest.raises(SystemExit) as exc:
         cli.main([str(picasa_tree), "--output", str(tmp_path / "out"), *args])
@@ -175,15 +197,24 @@ def test_main_missing_source(tmp_path, capsys):
 def test_main_migration_uses_env_file(picasa_tree, tmp_path, monkeypatch):
     env_file = tmp_path / "test.env"
     env_file.write_text("IMMICH_URL=http://from-file\nIMMICH_API_KEY=key\n", encoding="utf-8")
-    created = {}
+    created: dict[str, object] = {}
 
     def fake_api(url, api_key, timeout, verify_tls, debug=False):
         created.update(url=url, api_key=api_key, verify_tls=verify_tls, debug=debug)
         return FakeImmich(inventory())
 
     monkeypatch.setattr(cli, "ImmichAPI", fake_api)
-    code = cli.main([str(picasa_tree), "--output", str(tmp_path / "out"), "--env-file", str(env_file),
-                     "--no-verify-tls", "--debug-api"])
+    code = cli.main(
+        [
+            str(picasa_tree),
+            "--output",
+            str(tmp_path / "out"),
+            "--env-file",
+            str(env_file),
+            "--no-verify-tls",
+            "--debug-api",
+        ]
+    )
     assert code == 0
     assert created == {"url": "http://from-file", "api_key": "key", "verify_tls": False, "debug": True}
     assert load(tmp_path / "out" / "migration_report.json")["mode"] == "dry-run"

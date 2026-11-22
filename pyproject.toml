@@ -21,6 +21,8 @@ classifiers = [
 
 [project.optional-dependencies]
 test = ["pytest>=7"]
+# Code-style checks, run by tests/test_code_style.py (skipped if not installed).
+lint = ["black>=24", "pylint>=3", "mypy>=1.8", "pyright>=1.1.350", "types-requests"]
 
 [project.scripts]
 picasa-to-immich = "picasa_immich.cli:run"
@@ -36,3 +38,49 @@ version = { attr = "picasa_immich.__version__" }
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-ra"
+markers = ["style: code-style checks (black, pylint, mypy, pyright); deselect with -m 'not style'"]
+
+# --------------------------------------------------------------------------- #
+# Code style. All tools check picasa_immich/, tests/ and picasa_to_immich.py.
+# --------------------------------------------------------------------------- #
+
+[tool.black]
+line-length = 120
+target-version = ["py310"]
+
+[tool.pylint.main]
+py-version = "3.10"
+# Lets pylint import picasa_immich and tests.helpers when checking tests/.
+source-roots = ["."]
+
+[tool.pylint.format]
+max-line-length = 120
+
+[tool.pylint.basic]
+# Short functions and private helpers need no docstring.
+docstring-min-length = 10
+
+[tool.pylint.design]
+# Migration and run_migration take several keyword-only options.
+max-args = 7
+max-positional-arguments = 5
+
+[tool.mypy]
+python_version = "3.10"
+files = ["picasa_immich", "tests", "picasa_to_immich.py"]
+check_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_return_any = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+# The package itself must be fully annotated; tests may stay unannotated.
+module = ["picasa_immich.*"]
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+
+[tool.pyright]
+include = ["picasa_immich", "tests", "picasa_to_immich.py"]
+pythonVersion = "3.10"
+typeCheckingMode = "standard"

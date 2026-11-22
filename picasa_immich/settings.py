@@ -4,6 +4,7 @@ Without --env-file, the first existing file of default_env_files() is used:
   1. .env in the current working directory
   2. .env in the user configuration directory (see user_config_dir)
 """
+
 from __future__ import annotations
 
 import os
@@ -16,8 +17,9 @@ APP_NAME = "picasa-to-immich"
 ENV_FILE_NAME = ".env"
 
 
-def user_config_dir(environ: Mapping[str, str] = os.environ, platform: str = sys.platform,
-                    home: Path | None = None) -> Path:
+def user_config_dir(
+    environ: Mapping[str, str] = os.environ, platform: str = sys.platform, home: Path | None = None
+) -> Path:
     """Per-user configuration directory for this program.
 
     Windows: %APPDATA%\\picasa-to-immich
@@ -53,7 +55,7 @@ def read_env_file(path: Path) -> dict[str, str]:
         if not line or line.startswith("#"):
             continue
         if line.startswith("export "):
-            line = line[len("export "):].lstrip()
+            line = line[len("export ") :].lstrip()
         key, sep, value = line.partition("=")
         key, value = key.strip(), value.strip()
         if not sep or not key:
@@ -71,20 +73,26 @@ class Credentials:
     env_file_used: Path | None = None
 
 
-def resolve_credentials(url: str | None, api_key: str | None, env_file: Path | None,
-                        environ: Mapping[str, str] = os.environ) -> Credentials:
+def find_env_file(env_file: Path | None) -> Path | None:
+    """The explicit file (which must exist), else the first existing default file, else None."""
+    if env_file:
+        explicit = env_file.expanduser()
+        if not explicit.is_file():
+            raise ValueError(f"--env-file not found: {explicit}")
+        return explicit
+    return next((p for p in default_env_files() if p.is_file()), None)
+
+
+def resolve_credentials(
+    url: str | None, api_key: str | None, env_file: Path | None, environ: Mapping[str, str] = os.environ
+) -> Credentials:
     """Combine settings with priority: command line, environment, .env file.
 
     `env_file` is an explicitly requested file (it must exist) or None to use
     the first existing file of default_env_files(), if any. Only one file is read.
     Raises ValueError if an explicit file is missing or a file is malformed.
     """
-    if env_file:
-        path: Path | None = env_file.expanduser()
-        if not path.is_file():
-            raise ValueError(f"--env-file not found: {path}")
-    else:
-        path = next((p for p in default_env_files() if p.is_file()), None)
+    path = find_env_file(env_file)
     file_values: dict[str, str] = {}
     if path:
         try:

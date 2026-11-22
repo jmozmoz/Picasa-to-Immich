@@ -1,4 +1,7 @@
 """ImmichAPI response parsing and pagination, without any network access."""
+
+from typing import Any, cast
+
 import pytest
 
 from picasa_immich import immich
@@ -7,7 +10,7 @@ from picasa_immich import immich
 class ScriptedAPI(immich.ImmichAPI):
     """ImmichAPI whose request() returns prepared responses and records the calls."""
 
-    def __init__(self, responses):
+    def __init__(self, responses):  # pylint: disable=super-init-not-called  # no real HTTP session
         self.responses = list(responses)
         self.calls = []
 
@@ -23,14 +26,17 @@ def page(ids, **extra):
     return {"assets": {"items": [{"id": i} for i in ids], **extra}}
 
 
-@pytest.mark.parametrize(("payload", "expected"), [
-    (page(["a"], nextPage="2"), (["a"], True)),
-    (page(["a"], nextPage=None), (["a"], False)),
-    ({"items": [{"id": "a"}], "hasNextPage": True}, (["a"], True)),
-    ({"items": [{"id": "a"}], "hasMore": True}, (["a"], True)),
-    ({"assets": [{"id": "a"}]}, (["a"], False)),
-    ({"data": {"items": []}}, ([], False)),
-])
+@pytest.mark.parametrize(
+    ("payload", "expected"),
+    [
+        (page(["a"], nextPage="2"), (["a"], True)),
+        (page(["a"], nextPage=None), (["a"], False)),
+        ({"items": [{"id": "a"}], "hasNextPage": True}, (["a"], True)),
+        ({"items": [{"id": "a"}], "hasMore": True}, (["a"], True)),
+        ({"assets": [{"id": "a"}]}, (["a"], False)),
+        ({"data": {"items": []}}, ([], False)),
+    ],
+)
 def test_extract_items(payload, expected):
     items, has_more = immich.ImmichAPI._extract_items(payload)
     assert ([i["id"] for i in items], has_more) == expected
@@ -74,10 +80,13 @@ def test_album_asset_ids():
     assert api.calls[0][2] == {"size": 2, "albumIds": ["alb"], "page": 1}
 
 
-@pytest.mark.parametrize(("response", "expected"), [
-    ([{"id": "x"}], [{"id": "x"}]),
-    ({"items": [{"id": "y"}]}, [{"id": "y"}]),
-])
+@pytest.mark.parametrize(
+    ("response", "expected"),
+    [
+        ([{"id": "x"}], [{"id": "x"}]),
+        ({"items": [{"id": "y"}]}, [{"id": "y"}]),
+    ],
+)
 def test_list_albums(response, expected):
     api = ScriptedAPI([response])
     assert api.list_albums() == expected
@@ -133,31 +142,32 @@ class FakeSession:
         return self.response
 
 
-def api_with(response, debug=False):
+def api_with(response, debug=False) -> tuple[immich.ImmichAPI, FakeSession]:
     pytest.importorskip("requests")
     api = immich.ImmichAPI("http://server:2283/", "secret-key", timeout=5, debug=debug)
-    api.session = FakeSession(response)
-    return api
+    session = FakeSession(response)
+    api.session = cast(Any, session)  # stands in for requests.Session
+    return api, session
 
 
 def test_request_builds_url_and_returns_json():
-    api = api_with(FakeResponse(200, b"{}", {"ok": True}))
+    api, session = api_with(FakeResponse(200, b"{}", {"ok": True}))
     assert api.request("GET", "/server/version") == {"ok": True}
-    assert api.session.calls == [("GET", "http://server:2283/api/server/version", {"timeout": 5})]
+    assert session.calls == [("GET", "http://server:2283/api/server/version", {"timeout": 5})]
 
 
 def test_request_returns_none_for_empty_body():
-    assert api_with(FakeResponse(204)).request("PUT", "x") is None
+    assert api_with(FakeResponse(204))[0].request("PUT", "x") is None
 
 
 def test_request_raises_with_details_on_http_error():
-    api = api_with(FakeResponse(400, b"bad", {"message": "bad"}, {"X-Correlation-ID": "c-1"}))
+    api, _ = api_with(FakeResponse(400, b"bad", {"message": "bad"}, {"X-Correlation-ID": "c-1"}))
     with pytest.raises(RuntimeError, match=r"HTTP 400.*bad.*c-1"):
         api.request("POST", "albums")
 
 
 def test_debug_logging_never_contains_api_key(caplog):
-    api = api_with(FakeResponse(200, b"{}", {}), debug=True)
+    api, _ = api_with(FakeResponse(200, b"{}", {}), debug=True)
     with caplog.at_level("INFO", logger="picasa_immich"):
         api.request("POST", "search/metadata", json={"size": 1})
     assert "API -> POST http://server:2283/api/search/metadata" in caplog.text
