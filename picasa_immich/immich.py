@@ -1,10 +1,12 @@
-"""Immich REST API client. Needs the 'requests' package."""
+"""Immich REST API client, built on requests."""
 
 from __future__ import annotations
 
 import json
 import logging
 from typing import Any, Iterator, Protocol
+
+import requests
 
 LOG = logging.getLogger(__name__)
 
@@ -24,12 +26,6 @@ class ImmichAPI:
     """Client for the Immich REST API (/api), authenticated with an API key."""
 
     def __init__(self, url: str, api_key: str, timeout: int = 60, verify_tls: bool = True, debug: bool = False):
-        try:
-            import requests  # pylint: disable=import-outside-toplevel  # optional for --scan-only
-        except ImportError as exc:
-            raise RuntimeError(
-                "The Immich migration mode requires 'requests'. Install it with: pip install requests"
-            ) from exc
         self.base = url.rstrip("/") + "/api"
         self.session = requests.Session()
         self.session.headers.update({"x-api-key": api_key, "Accept": "application/json"})

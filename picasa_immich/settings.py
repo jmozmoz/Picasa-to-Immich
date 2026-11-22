@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
 
+from dotenv import dotenv_values
+
 APP_NAME = "picasa-to-immich"
 ENV_FILE_NAME = ".env"
 
@@ -51,12 +53,6 @@ def read_env_file(path: Path) -> dict[str, str]:
     """
     if not path.is_file():
         return {}
-    try:
-        from dotenv import dotenv_values  # pylint: disable=import-outside-toplevel  # optional for --scan-only
-    except ImportError as exc:
-        raise RuntimeError(
-            "Reading a .env file requires 'python-dotenv'. Install it with: pip install python-dotenv"
-        ) from exc
     values = dotenv_values(path, interpolate=False, encoding="utf-8-sig")
     return {key: value for key, value in values.items() if value is not None}
 

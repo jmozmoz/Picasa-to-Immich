@@ -44,8 +44,8 @@ This installs the `picasa-to-immich` command and its dependencies,
 `requests` and `python-dotenv`. Check it with `picasa-to-immich --version`.
 
 Without installing, the same program can be run from a checkout with
-`python picasa_to_immich.py ...`. That needs `requests` and
-`python-dotenv` only for Immich migration mode, not for `--scan-only`.
+`python picasa_to_immich.py ...`. Then install the dependencies
+yourself: `python -m pip install requests python-dotenv`.
 
 Immich migration mode also needs an Immich server URL and API key (see
 [Configuration](#configuration)).
@@ -484,10 +484,9 @@ separate from the Picasa collection.
 
 -   **`Set --url and --api-key...`**: Immich migration mode requires
     both values. Use `--scan-only` to run without them.
--   **`No module named requests`** or **`requires 'python-dotenv'`**:
+-   **`No module named 'requests'`** or **`No module named 'dotenv'`**:
     Only when running `picasa_to_immich.py` without installing. Install
-    the dependencies with `python -m pip install requests python-dotenv`;
-    they are needed only for Immich migration mode.
+    the dependencies with `python -m pip install requests python-dotenv`.
 -   **The `.env` file is not found**: Run `picasa-to-immich --help`;
     the `--env-file` description lists the paths that are searched.
 -   **Files appear under `missingFiles`**: Check that the files exist

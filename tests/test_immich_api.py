@@ -143,7 +143,6 @@ class FakeSession:
 
 
 def api_with(response, debug=False) -> tuple[immich.ImmichAPI, FakeSession]:
-    pytest.importorskip("requests")
     api = immich.ImmichAPI("http://server:2283/", "secret-key", timeout=5, debug=debug)
     session = FakeSession(response)
     api.session = cast(Any, session)  # stands in for requests.Session
