@@ -10,7 +10,7 @@ readme = "README.md"
 license = "AGPL-3.0-or-later"
 license-files = ["LICENSE"]
 requires-python = ">=3.10"
-dependencies = ["requests>=2.20"]
+dependencies = ["requests>=2.20", "python-dotenv>=1.0"]
 keywords = ["picasa", "immich", "photos", "albums", "migration"]
 classifiers = [
     "Programming Language :: Python :: 3",

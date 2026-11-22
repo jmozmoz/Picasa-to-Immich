@@ -42,28 +42,23 @@ def default_env_files() -> list[Path]:
 
 
 def read_env_file(path: Path) -> dict[str, str]:
-    """Read KEY=VALUE lines from a .env file; return {} if the file does not exist.
+    """Read KEY=VALUE lines from a .env file with python-dotenv; return {} if the file does not exist.
 
-    Supports blank lines, '#' comments, an optional 'export ' prefix and values
-    in single or double quotes. Values are not expanded or interpolated.
+    Uses the common .env syntax: '#' comments (also after a value), an optional
+    'export ' prefix, quoted values with escapes and multi-line quoted values.
+    ${VAR} references are not expanded. Keys without '=' are ignored, and
+    python-dotenv logs a warning for lines it cannot parse and skips them.
     """
     if not path.is_file():
         return {}
-    values: dict[str, str] = {}
-    for number, line in enumerate(path.read_text(encoding="utf-8-sig").splitlines(), 1):
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        if line.startswith("export "):
-            line = line[len("export ") :].lstrip()
-        key, sep, value = line.partition("=")
-        key, value = key.strip(), value.strip()
-        if not sep or not key:
-            raise ValueError(f"line {number}: expected KEY=VALUE")
-        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
-            value = value[1:-1]
-        values[key] = value
-    return values
+    try:
+        from dotenv import dotenv_values  # pylint: disable=import-outside-toplevel  # optional for --scan-only
+    except ImportError as exc:
+        raise RuntimeError(
+            "Reading a .env file requires 'python-dotenv'. Install it with: pip install python-dotenv"
+        ) from exc
+    values = dotenv_values(path, interpolate=False, encoding="utf-8-sig")
+    return {key: value for key, value in values.items() if value is not None}
 
 
 @dataclass
@@ -90,7 +85,7 @@ def resolve_credentials(
 
     `env_file` is an explicitly requested file (it must exist) or None to use
     the first existing file of default_env_files(), if any. Only one file is read.
-    Raises ValueError if an explicit file is missing or a file is malformed.
+    Raises ValueError if an explicit file is missing or a file cannot be decoded.
     """
     path = find_env_file(env_file)
     file_values: dict[str, str] = {}

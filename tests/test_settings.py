@@ -31,12 +31,21 @@ def test_read_env_file_missing_returns_empty(tmp_path):
     assert not settings.read_env_file(tmp_path / "missing.env")
 
 
-@pytest.mark.parametrize("line", ["NO_EQUALS_SIGN", "=value"])
-def test_read_env_file_rejects_malformed_lines(tmp_path, line):
+def test_read_env_file_strips_inline_comments(tmp_path):
     path = tmp_path / ".env"
-    path.write_text(f"OK=1\n{line}\n", encoding="utf-8")
-    with pytest.raises(ValueError, match="line 2"):
-        settings.read_env_file(path)
+    path.write_text('IMMICH_API_KEY=abc123  # prod key\nQUOTED="x # not a comment"\nREF=${HOME}/x\n', encoding="utf-8")
+    assert settings.read_env_file(path) == {
+        "IMMICH_API_KEY": "abc123",
+        "QUOTED": "x # not a comment",
+        "REF": "${HOME}/x",  # no interpolation
+    }
+
+
+@pytest.mark.parametrize("line", ["NO_EQUALS_SIGN", "=value"])
+def test_read_env_file_skips_malformed_lines(tmp_path, line):
+    path = tmp_path / ".env"
+    path.write_text(f"OK=1\n{line}\nLAST=2\n", encoding="utf-8")
+    assert settings.read_env_file(path) == {"OK": "1", "LAST": "2"}
 
 
 @pytest.fixture
@@ -105,8 +114,8 @@ def test_explicit_env_file_must_exist(tmp_path):
         settings.resolve_credentials(None, None, tmp_path / "missing.env", environ={})
 
 
-def test_malformed_env_file_is_reported(tmp_path):
+def test_unreadable_env_file_is_reported(tmp_path):
     path = tmp_path / "bad.env"
-    path.write_text("BROKEN\n", encoding="utf-8")
+    path.write_bytes(b"IMMICH_URL=\xff\xfe\n")  # not UTF-8
     with pytest.raises(ValueError, match="Cannot read"):
         settings.resolve_credentials(None, None, path, environ={})

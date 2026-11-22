@@ -40,12 +40,12 @@ python -m pip install .                  # from a checkout
 python -m pip install picasa-to-immich   # from PyPI, once published
 ```
 
-This installs the `picasa-to-immich` command and its only dependency,
-`requests`. Check it with `picasa-to-immich --version`.
+This installs the `picasa-to-immich` command and its dependencies,
+`requests` and `python-dotenv`. Check it with `picasa-to-immich --version`.
 
 Without installing, the same program can be run from a checkout with
-`python picasa_to_immich.py ...`. That needs `requests` only for Immich
-migration mode, not for `--scan-only`.
+`python picasa_to_immich.py ...`. That needs `requests` and
+`python-dotenv` only for Immich migration mode, not for `--scan-only`.
 
 Immich migration mode also needs an Immich server URL and API key (see
 [Configuration](#configuration)).
@@ -214,8 +214,11 @@ The configuration directory is the usual place once the program is
 installed; create the folder if it does not exist. `picasa-to-immich
 --help` shows both paths for your system. Use `--env-file PATH` to
 read any other file. `.env.example` in the source checkout is a
-template. Blank lines, `#` comments, an `export ` prefix and quoted
-values are accepted.
+template. The file is read with
+[python-dotenv](https://pypi.org/project/python-dotenv/): blank lines,
+`#` comments (also after a value, as in `KEY=value  # note`), an
+`export ` prefix and quoted values are accepted. `${VAR}` references
+are not expanded. Lines that cannot be parsed are skipped with a warning.
 
 Windows (PowerShell):
 
@@ -481,10 +484,10 @@ separate from the Picasa collection.
 
 -   **`Set --url and --api-key...`**: Immich migration mode requires
     both values. Use `--scan-only` to run without them.
--   **`No module named requests`**: Only when running
-    `picasa_to_immich.py` without installing. Install the dependency
-    with `python -m pip install requests`; it is needed only for Immich
-    migration mode.
+-   **`No module named requests`** or **`requires 'python-dotenv'`**:
+    Only when running `picasa_to_immich.py` without installing. Install
+    the dependencies with `python -m pip install requests python-dotenv`;
+    they are needed only for Immich migration mode.
 -   **The `.env` file is not found**: Run `picasa-to-immich --help`;
     the `--env-file` description lists the paths that are searched.
 -   **Files appear under `missingFiles`**: Check that the files exist
