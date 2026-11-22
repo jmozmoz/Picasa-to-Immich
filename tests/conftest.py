@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-import picasa_to_immich as p2i
+from picasa_immich import settings
 
 
 @pytest.fixture(autouse=True)
@@ -17,7 +17,7 @@ def isolated_settings(monkeypatch, tmp_path_factory):
     """Never read the developer's real .env or IMMICH_* variables in tests."""
     monkeypatch.delenv("IMMICH_URL", raising=False)
     monkeypatch.delenv("IMMICH_API_KEY", raising=False)
-    monkeypatch.setattr(p2i, "DEFAULT_ENV_FILE", tmp_path_factory.mktemp("noenv") / ".env")
+    monkeypatch.setattr(settings, "DEFAULT_ENV_FILE", tmp_path_factory.mktemp("noenv") / ".env")
 
 
 def b64_sha1(data: bytes) -> str:

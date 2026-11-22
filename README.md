@@ -502,6 +502,25 @@ separate from the Picasa collection.
 
 ## Development and tests
 
+### Code layout
+
+`picasa_to_immich.py` is only the entry point. The code is in the
+`picasa_immich` package next to it, so copy both when moving the
+tool to another machine.
+
+| Module | Contents |
+|---|---|
+| `settings.py` | `.env` reading and the URL/API-key priority |
+| `util.py` | Shared helpers: JSON output, path keys, timestamps |
+| `picasa.py` | `PicasaLibrary`: reads `.picasa.ini` files; no Immich dependency |
+| `scan_report.py` | Scan-only mode: album file lists |
+| `matching.py` | `AssetIndex` and matching local files to Immich assets; no network |
+| `immich.py` | `ImmichAPI`: the Immich REST client |
+| `migration.py` | `Migration`: matching, album sync and the migration reports |
+| `cli.py` | Command-line options and `main()` |
+
+### Tests
+
 The tests use [pytest](https://pytest.org) and never contact an Immich
 server: Immich is replaced by an in-memory fake, and Picasa folders are
 created in temporary directories. They also ignore any real `.env` file
@@ -515,10 +534,12 @@ python -m pytest
 | File | Covers |
 |---|---|
 | `tests/test_settings.py` | `.env` parsing and the priority of URL/API-key sources |
-| `tests/test_picasa.py` | Reading `.picasa.ini` files and scan-only output |
+| `tests/test_picasa.py` | Reading `.picasa.ini` files |
+| `tests/test_scan_report.py` | Scan-only output |
 | `tests/test_matching.py` | Matching local files to Immich assets |
 | `tests/test_immich_api.py` | API response parsing and pagination |
 | `tests/test_migration.py` | Dry run, `--apply` and the command line, end to end |
+| `tests/test_package.py` | Module independence and the entry script |
 
 The `test/` directory (singular) holds example output from a real run
 and is not part of the test suite.

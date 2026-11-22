@@ -2,7 +2,7 @@ import hashlib
 
 import pytest
 
-import picasa_to_immich as p2i
+from picasa_immich import matching
 from conftest import b64_sha1, external_asset, uploaded_asset
 
 CONTENT = b"local file content"
@@ -11,17 +11,17 @@ SIZE = len(CONTENT)
 
 
 def match(assets, filename="IMG.jpg", allow_name_only=False):
-    return p2i.match_asset(SHA1, SIZE, filename, p2i.AssetIndex(assets), allow_name_only)
+    return matching.match_asset(SHA1, SIZE, filename, matching.AssetIndex(assets), allow_name_only)
 
 
 def test_checksum_forms():
-    assert p2i.checksum_forms(SHA1.upper()) == {SHA1, b64_sha1(CONTENT)}
+    assert matching.checksum_forms(SHA1.upper()) == {SHA1, b64_sha1(CONTENT)}
 
 
 def test_sha1_file(tmp_path):
     path = tmp_path / "f.bin"
     path.write_bytes(CONTENT)
-    assert p2i.sha1_file(path, chunk_size=3) == (SHA1, SIZE)
+    assert matching.sha1_file(path, chunk_size=3) == (SHA1, SIZE)
 
 
 @pytest.mark.parametrize(("asset", "expected"), [
@@ -33,28 +33,28 @@ def test_sha1_file(tmp_path):
     ({}, None),
 ])
 def test_remote_size(asset, expected):
-    assert p2i.remote_size(asset) == expected
+    assert matching.remote_size(asset) == expected
 
 
 def test_path_based_checksum_is_detected_and_ignored():
     asset = external_asset("e", "IMG.jpg", "/lib/IMG.jpg", SIZE)
-    assert p2i.is_path_based_checksum(asset)
-    assert p2i.remote_checksum(asset) is None
+    assert matching.is_path_based_checksum(asset)
+    assert matching.remote_checksum(asset) is None
 
 
 def test_content_checksum_is_kept():
     asset = uploaded_asset("u", "IMG.jpg", CONTENT)
-    assert not p2i.is_path_based_checksum(asset)
-    assert p2i.remote_checksum(asset) == b64_sha1(CONTENT)
+    assert not matching.is_path_based_checksum(asset)
+    assert matching.remote_checksum(asset) == b64_sha1(CONTENT)
 
 
 def test_hex_checksum_with_path_hash_is_detected():
     path_hash = hashlib.sha1(b"path:/lib/x.jpg").hexdigest()
-    assert p2i.is_path_based_checksum({"checksum": path_hash, "originalPath": "/lib/x.jpg"})
+    assert matching.is_path_based_checksum({"checksum": path_hash, "originalPath": "/lib/x.jpg"})
 
 
 def test_checksum_without_original_path_counts_as_content():
-    assert not p2i.is_path_based_checksum({"checksum": "abc"})
+    assert not matching.is_path_based_checksum({"checksum": "abc"})
 
 
 def test_match_by_sha1_ignores_filename():
@@ -119,12 +119,12 @@ def test_no_candidate():
 def test_match_local_file_reads_the_file(tmp_path):
     path = tmp_path / "IMG.jpg"
     path.write_bytes(CONTENT)
-    result = p2i.match_local_file(path, p2i.AssetIndex([uploaded_asset("u", "x.jpg", CONTENT)]), False)
+    result = matching.match_local_file(path, matching.AssetIndex([uploaded_asset("u", "x.jpg", CONTENT)]), False)
     assert result.asset["id"] == "u"
 
 
 def test_match_local_file_reports_unreadable_file(tmp_path):
-    result = p2i.match_local_file(tmp_path / "gone.jpg", p2i.AssetIndex([]), False)
+    result = matching.match_local_file(tmp_path / "gone.jpg", matching.AssetIndex([]), False)
     assert result.status == "unmatched"
     assert result.reason.startswith("cannot_read_local_file")
 
@@ -132,5 +132,5 @@ def test_match_local_file_reports_unreadable_file(tmp_path):
 def test_asset_index_does_not_modify_assets():
     asset = external_asset("e", "IMG.jpg", "/lib/IMG.jpg", SIZE)
     before = dict(asset)
-    p2i.AssetIndex([asset])
+    matching.AssetIndex([asset])
     assert asset == before

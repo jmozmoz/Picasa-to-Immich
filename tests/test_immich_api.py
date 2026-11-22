@@ -1,10 +1,10 @@
 """ImmichAPI response parsing and pagination, without any network access."""
 import pytest
 
-import picasa_to_immich as p2i
+from picasa_immich import immich
 
 
-class ScriptedAPI(p2i.ImmichAPI):
+class ScriptedAPI(immich.ImmichAPI):
     """ImmichAPI whose request() returns prepared responses and records the calls."""
 
     def __init__(self, responses):
@@ -32,14 +32,14 @@ def page(ids, **extra):
     ({"data": {"items": []}}, ([], False)),
 ])
 def test_extract_items(payload, expected):
-    items, has_more = p2i.ImmichAPI._extract_items(payload)
+    items, has_more = immich.ImmichAPI._extract_items(payload)
     assert ([i["id"] for i in items], has_more) == expected
 
 
 @pytest.mark.parametrize("payload", [[], {"unexpected": 1}])
 def test_extract_items_rejects_unknown_shapes(payload):
     with pytest.raises(RuntimeError):
-        p2i.ImmichAPI._extract_items(payload)
+        immich.ImmichAPI._extract_items(payload)
 
 
 def test_list_assets_follows_pages_and_removes_duplicates():
@@ -135,7 +135,7 @@ class FakeSession:
 
 def api_with(response, debug=False):
     pytest.importorskip("requests")
-    api = p2i.ImmichAPI("http://server:2283/", "secret-key", timeout=5, debug=debug)
+    api = immich.ImmichAPI("http://server:2283/", "secret-key", timeout=5, debug=debug)
     api.session = FakeSession(response)
     return api
 
@@ -158,7 +158,7 @@ def test_request_raises_with_details_on_http_error():
 
 def test_debug_logging_never_contains_api_key(caplog):
     api = api_with(FakeResponse(200, b"{}", {}), debug=True)
-    with caplog.at_level("INFO", logger="picasa_to_immich"):
+    with caplog.at_level("INFO", logger="picasa_immich"):
         api.request("POST", "search/metadata", json={"size": 1})
     assert "API -> POST http://server:2283/api/search/metadata" in caplog.text
     assert "secret-key" not in caplog.text

@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-import picasa_to_immich as p2i
+from picasa_immich import cli, migration
 from conftest import FakeImmich, external_asset, uploaded_asset
 
 
@@ -27,7 +27,7 @@ def test_dry_run_reports_without_changes(picasa_tree, tmp_path):
     api = FakeImmich(inventory(), albums=[{"id": "alb-best", "albumName": "best OF"}],
                      members={"alb-best": {"asset-a"}})
     output = tmp_path / "out"
-    report = p2i.run_migration(api, picasa_tree, output)
+    report = migration.run_migration(api, picasa_tree, output)
 
     assert api.created == [] and api.added == []
     assert report["mode"] == "dry-run"
@@ -59,7 +59,7 @@ def test_dry_run_reports_without_changes(picasa_tree, tmp_path):
 
 def test_output_files(picasa_tree, tmp_path):
     output = tmp_path / "out"
-    p2i.run_migration(FakeImmich(inventory()), picasa_tree, output)
+    migration.run_migration(FakeImmich(inventory()), picasa_tree, output)
 
     mapping = load(output / "asset_mapping.json")
     assert mapping["2020/a.jpg"]["immichAssetId"] == "asset-a"
@@ -86,7 +86,7 @@ def test_one_asset_referenced_by_several_local_files(tmp_path):
             f"[.album:{token}]\nname=Album {token}\n[same.jpg]\nalbums={token}\n", encoding="utf-8")
     api = FakeImmich([uploaded_asset("one", "same.jpg", b"identical")])
     output = tmp_path / "out"
-    p2i.run_migration(api, root, output, apply=True)
+    migration.run_migration(api, root, output, apply=True)
 
     assert sorted(api.created) == [("Album t1", ["one"]), ("Album t2", ["one"])]
     record = load(output / "picasa_migration_metadata.json")["assets"]["one"]
@@ -96,7 +96,7 @@ def test_one_asset_referenced_by_several_local_files(tmp_path):
 
 def test_apply_creates_and_updates_albums(picasa_tree, tmp_path):
     api = FakeImmich(inventory(), albums=[{"id": "alb-best", "albumName": "Best of"}])
-    report = p2i.run_migration(api, picasa_tree, tmp_path / "out", apply=True)
+    report = migration.run_migration(api, picasa_tree, tmp_path / "out", apply=True)
 
     assert api.created == [("Holiday 2020", ["asset-a", "asset-b"]), ("Picasa album tok3", [])]
     assert api.added == [("alb-best", ["asset-a", "asset-sub-a"])]
@@ -108,7 +108,7 @@ def test_apply_creates_and_updates_albums(picasa_tree, tmp_path):
 def test_complete_album_is_left_alone(picasa_tree, tmp_path):
     api = FakeImmich(inventory(), albums=[{"id": "alb", "albumName": "Best of"}],
                      members={"alb": {"asset-a", "asset-sub-a"}})
-    report = p2i.run_migration(api, picasa_tree, tmp_path / "out", apply=True)
+    report = migration.run_migration(api, picasa_tree, tmp_path / "out", apply=True)
     assert api.added == []
     assert report["albums"][1]["action"] == "already_complete"
 
@@ -118,7 +118,7 @@ def test_duplicate_and_unreadable_albums_are_skipped(picasa_tree, tmp_path):
                      albums=[{"id": "d1", "albumName": "Holiday 2020"}, {"id": "d2", "albumName": "Holiday 2020"},
                              {"id": "bad", "albumName": "Best of"}],
                      failing_albums={"bad"})
-    report = p2i.run_migration(api, picasa_tree, tmp_path / "out", apply=True)
+    report = migration.run_migration(api, picasa_tree, tmp_path / "out", apply=True)
 
     actions = {a["token"]: a["action"] for a in report["albums"]}
     assert actions["tok1"] == "ambiguous_existing_album"
@@ -132,13 +132,13 @@ def test_create_album_without_id_is_an_error(picasa_tree, tmp_path):
     api = FakeImmich(inventory())
     api.create_album = lambda name, ids: {}
     with pytest.raises(RuntimeError, match="did not contain an id"):
-        p2i.run_migration(api, picasa_tree, tmp_path / "out", apply=True)
+        migration.run_migration(api, picasa_tree, tmp_path / "out", apply=True)
 
 
 def test_allow_name_only(picasa_tree, tmp_path):
     assets = [external_asset("asset-a", "a.jpg", "/lib/a.jpg", 999)]  # wrong size
-    strict = p2i.run_migration(FakeImmich(assets), picasa_tree, tmp_path / "strict")
-    loose = p2i.run_migration(FakeImmich(assets[:1]), picasa_tree, tmp_path / "loose", allow_name_only=True)
+    strict = migration.run_migration(FakeImmich(assets), picasa_tree, tmp_path / "strict")
+    loose = migration.run_migration(FakeImmich(assets[:1]), picasa_tree, tmp_path / "loose", allow_name_only=True)
     assert strict["summary"]["matchedAssets"] == 0
     # Two local a.jpg files, one candidate each -> both low-confidence matches.
     assert loose["summary"]["lowConfidenceMatches"] == 2
@@ -149,7 +149,7 @@ def test_allow_name_only(picasa_tree, tmp_path):
 # --------------------------------------------------------------------------- #
 
 def test_main_scan_only(picasa_tree, tmp_path):
-    assert p2i.main([str(picasa_tree), "--scan-only", "--output", str(tmp_path / "out")]) == 0
+    assert cli.main([str(picasa_tree), "--scan-only", "--output", str(tmp_path / "out")]) == 0
     assert (tmp_path / "out" / "album_file_list.txt").is_file()
 
 
@@ -161,14 +161,14 @@ def test_main_scan_only(picasa_tree, tmp_path):
 ])
 def test_main_argument_errors(picasa_tree, tmp_path, capsys, args, message):
     with pytest.raises(SystemExit) as exc:
-        p2i.main([str(picasa_tree), "--output", str(tmp_path / "out"), *args])
+        cli.main([str(picasa_tree), "--output", str(tmp_path / "out"), *args])
     assert exc.value.code == 2
     assert message in capsys.readouterr().err
 
 
 def test_main_missing_source(tmp_path, capsys):
     with pytest.raises(SystemExit):
-        p2i.main([str(tmp_path / "nope"), "--scan-only"])
+        cli.main([str(tmp_path / "nope"), "--scan-only"])
     assert "Source directory does not exist" in capsys.readouterr().err
 
 
@@ -181,8 +181,8 @@ def test_main_migration_uses_env_file(picasa_tree, tmp_path, monkeypatch):
         created.update(url=url, api_key=api_key, verify_tls=verify_tls, debug=debug)
         return FakeImmich(inventory())
 
-    monkeypatch.setattr(p2i, "ImmichAPI", fake_api)
-    code = p2i.main([str(picasa_tree), "--output", str(tmp_path / "out"), "--env-file", str(env_file),
+    monkeypatch.setattr(cli, "ImmichAPI", fake_api)
+    code = cli.main([str(picasa_tree), "--output", str(tmp_path / "out"), "--env-file", str(env_file),
                      "--no-verify-tls", "--debug-api"])
     assert code == 0
     assert created == {"url": "http://from-file", "api_key": "key", "verify_tls": False, "debug": True}
