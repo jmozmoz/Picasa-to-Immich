@@ -601,18 +601,35 @@ fixtures as arguments, fakes with unused arguments); see
 
 ### Building and publishing
 
+The version comes from git tags via
+[setuptools-scm](https://pypi.org/project/setuptools-scm/); there is no
+version number to edit. To release, tag a clean commit and build from it:
+
 ``` bash
+git tag -a v0.2.0 -m "Release 0.2.0"
 python -m pip install build twine
 python -m build             # creates dist/*.whl and dist/*.tar.gz
 python -m twine check dist/*
 python -m twine upload dist/*
+git push origin v0.2.0
 ```
 
-The version is `__version__` in `picasa_immich/__init__.py`.
+Notes:
+
+-   Tags must look like `vX.Y.Z`. On a tagged commit the version is
+    `X.Y.Z`; later commits get development versions such as
+    `0.2.1.dev3+g1a2b3c4` (plus a date if there are uncommitted
+    changes). PyPI rejects these `+...` versions, so upload only builds
+    of a clean, tagged commit.
+-   Building needs git and the full history (in CI, for example
+    `fetch-depth: 0`). A ZIP download of the repository cannot be built.
+-   In an editable install the version is fixed at install time, so
+    `--version` does not change with new commits or tags. Refresh it
+    with `python -m pip install -e . --no-deps`. Never installed, the
+    version is `0+unknown`.
+
 `MANIFEST.in` adds the tests, `picasa_to_immich.py` and `.env.example`
-to the source archive and keeps `test/` and `backup/` out of it. Before
-the first upload, choose a license (see below) and add it to
-`pyproject.toml`.
+to the source archive and keeps `test/` and `backup/` out of it.
 
 ## AI assistance
 

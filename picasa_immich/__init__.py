@@ -11,4 +11,11 @@ Modules:
     cli          command-line interface
 """
 
-__version__ = "0.1.0"
+from importlib.metadata import PackageNotFoundError, version
+
+try:
+    # Set from the git tag by setuptools-scm when the package is installed
+    # (in an editable install: at install time; reinstall to refresh it).
+    __version__ = version("picasa-to-immich")
+except PackageNotFoundError:  # running from a checkout that was never installed
+    __version__ = "0+unknown"

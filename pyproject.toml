@@ -1,5 +1,6 @@
 [build-system]
-requires = ["setuptools>=77"]  # 77+ for the SPDX `license` expression
+# setuptools 77+ for the SPDX `license` expression; setuptools-scm sets the version from git tags.
+requires = ["setuptools>=77", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -31,8 +32,9 @@ picasa-to-immich = "picasa_immich.cli:run"
 [tool.setuptools]
 packages = ["picasa_immich"]
 
-[tool.setuptools.dynamic]
-version = { attr = "picasa_immich.__version__" }
+# The version comes from the latest git tag (vX.Y.Z), e.g. 0.1.0 on the tag itself
+# or 0.1.1.dev3+g1a2b3c4 three commits later. Read at runtime via importlib.metadata.
+[tool.setuptools_scm]
 
 [tool.pytest.ini_options]
 # Tests live in tests/; test/ holds example output and is not collected.
