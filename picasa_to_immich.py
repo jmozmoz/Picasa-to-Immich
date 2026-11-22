@@ -39,6 +39,34 @@ IMAGE_VIDEO_EXTENSIONS = {
 }
 
 
+DEFAULT_ENV_FILE = Path(__file__).resolve().parent / ".env"
+
+
+def read_env_file(path: Path) -> dict[str, str]:
+    """Read KEY=VALUE lines from a .env file; return {} if the file does not exist.
+
+    Supports blank lines, '#' comments, an optional 'export ' prefix and values
+    in single or double quotes. Values are not expanded or interpolated.
+    """
+    if not path.is_file():
+        return {}
+    values: dict[str, str] = {}
+    for number, line in enumerate(path.read_text(encoding="utf-8-sig").splitlines(), 1):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[len("export "):].lstrip()
+        key, sep, value = line.partition("=")
+        key, value = key.strip(), value.strip()
+        if not sep or not key:
+            raise ValueError(f"line {number}: expected KEY=VALUE")
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1]
+        values[key] = value
+    return values
+
+
 def json_write(path: Path, data: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
@@ -192,7 +220,7 @@ def checksum_forms(hex_digest: str) -> set[str]:
 
 
 class ImmichAPI:
-    def __init__(self, url: str, api_key: str, timeout: int = 60, verify_tls: bool = True):
+    def __init__(self, url: str, api_key: str, timeout: int = 60, verify_tls: bool = True, debug: bool = False):
         try:
             import requests
         except ImportError as exc:
@@ -202,10 +230,17 @@ class ImmichAPI:
         self.session.headers.update({"x-api-key": api_key, "Accept": "application/json"})
         self.timeout = timeout
         self.session.verify = verify_tls
+        self.debug = debug
 
     def request(self, method: str, endpoint: str, **kwargs: Any) -> Any:
         url = self.base + "/" + endpoint.lstrip("/")
+        if self.debug:
+            # Never log the API key: only method, URL, query and JSON body.
+            LOG.info("API -> %s %s params=%s json=%s", method, url,
+                     kwargs.get("params"), json.dumps(kwargs.get("json"), ensure_ascii=False))
         response = self.session.request(method, url, timeout=self.timeout, **kwargs)
+        if self.debug:
+            LOG.info("API <- HTTP %s %s (%d bytes)", response.status_code, endpoint, len(response.content))
         if not response.ok:
             try:
                 detail = response.json()
@@ -266,7 +301,8 @@ class ImmichAPI:
         page = 1
         cursor: str | None = None
         while True:
-            body: dict[str, Any] = {"size": page_size}
+            # withExif is needed for exifInfo.fileSizeInByte, used by size matching.
+            body: dict[str, Any] = {"size": page_size, "withExif": True}
             if cursor:
                 body["cursor"] = cursor
             else:
@@ -339,16 +375,37 @@ def remote_size(asset: dict[str, Any]) -> int | None:
             return int(value)
     exif = asset.get("exifInfo")
     if isinstance(exif, dict):
-        for key in ("fileSize", "fileSizeInBytes"):
+        # Immich's ExifResponseDto names this field "fileSizeInByte".
+        for key in ("fileSizeInByte", "fileSize", "fileSizeInBytes"):
             value = exif.get(key)
             if isinstance(value, (int, float)):
                 return int(value)
     return None
 
 
-def remote_checksum(asset: dict[str, Any]) -> str | None:
+def is_path_based_checksum(asset: dict[str, Any]) -> bool:
+    """True if the server checksum is SHA-1("path:" + originalPath), not a content hash.
+
+    Immich stores this placeholder for external-library assets, so it can never
+    equal the SHA-1 of the local file. The result is cached on the asset dict.
+    """
+    cached = asset.get("_pathBasedChecksum")
+    if isinstance(cached, bool):
+        return cached
     value = asset.get("checksum")
-    if isinstance(value, str) and value:
+    original_path = asset.get("originalPath")
+    result = False
+    if isinstance(value, str) and value and isinstance(original_path, str) and original_path:
+        path_sha1 = hashlib.sha1(f"path:{original_path}".encode("utf-8")).hexdigest()
+        result = value.strip() in checksum_forms(path_sha1)
+    asset["_pathBasedChecksum"] = result
+    return result
+
+
+def remote_checksum(asset: dict[str, Any]) -> str | None:
+    """Return the server's content checksum, or None if it is unknown or path-based."""
+    value = asset.get("checksum")
+    if isinstance(value, str) and value and not is_path_based_checksum(asset):
         return value.strip()
     return None
 
@@ -377,7 +434,9 @@ def match_asset(local_path: Path, assets: list[dict[str, Any]], allow_name_only:
 
     size_matches = [a for a in same_name if remote_size(a) == local_size]
     if len(size_matches) == 1:
-        return Match("matched", size_matches[0], reason="filename_and_size_no_server_checksum")
+        reason = ("filename_and_size_path_based_server_checksum" if is_path_based_checksum(size_matches[0])
+                  else "filename_and_size_no_server_checksum")
+        return Match("matched", size_matches[0], reason=reason)
     if len(size_matches) > 1:
         return Match("ambiguous", candidates=size_matches, reason="multiple_filename_size_matches")
 
@@ -482,14 +541,18 @@ def main() -> int:
     parser.add_argument("--output", type=Path, default=Path("picasa_migration"), help="Output/archive directory")
     parser.add_argument("--scan-only", action="store_true",
                         help="Only scan Picasa folders and write album file lists; no Immich connection or API key required")
-    parser.add_argument("--url", default=os.environ.get("IMMICH_URL"), help="Immich base URL, e.g. http://192.168.1.100:2283")
-    parser.add_argument("--api-key", default=os.environ.get("IMMICH_API_KEY"), help="API key (or IMMICH_API_KEY environment variable)")
+    parser.add_argument("--url", help="Immich base URL, e.g. http://192.168.1.100:2283 (or IMMICH_URL in the environment or .env)")
+    parser.add_argument("--api-key", help="API key (or IMMICH_API_KEY in the environment or .env)")
+    parser.add_argument("--env-file", type=Path,
+                        help=f"File with IMMICH_URL / IMMICH_API_KEY lines (default: {DEFAULT_ENV_FILE.name} next to this script, if present)")
     parser.add_argument("--apply", action="store_true", help="Actually create albums and add assets; default is dry-run")
     parser.add_argument("--allow-name-only", action="store_true", help="Allow unique filename-only matches (lower confidence)")
     parser.add_argument("--no-verify-tls", action="store_true", help="Disable TLS certificate verification")
     parser.add_argument("--page-size", type=int, default=500, help="Immich search page size (default: 500)")
     parser.add_argument("--timeout", type=int, default=60)
     parser.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"])
+    parser.add_argument("--debug-api", action="store_true",
+                        help="Log every Immich API request (method, URL, body) and response status")
     args = parser.parse_args()
 
     logging.basicConfig(level=getattr(logging, args.log_level), format="%(levelname)s: %(message)s")
@@ -507,8 +570,21 @@ def main() -> int:
                  result["iniFileCount"], result["folderMetadataCount"], result["albumCount"], result["imageSections"])
         return 0
 
+    # Priority: command line, then real environment variables, then the .env file.
+    env_file = (args.env_file or DEFAULT_ENV_FILE).expanduser()
+    if args.env_file and not env_file.is_file():
+        parser.error(f"--env-file not found: {env_file}")
+    try:
+        file_values = read_env_file(env_file)
+    except (OSError, ValueError) as exc:
+        parser.error(f"Cannot read {env_file}: {exc}")
+    if file_values:
+        LOG.info("Read settings from %s", env_file)
+    args.url = args.url or os.environ.get("IMMICH_URL") or file_values.get("IMMICH_URL")
+    args.api_key = args.api_key or os.environ.get("IMMICH_API_KEY") or file_values.get("IMMICH_API_KEY")
+
     if not args.url or not args.api_key:
-        parser.error("Set --url and --api-key, or IMMICH_URL and IMMICH_API_KEY environment variables (not needed with --scan-only)")
+        parser.error("Set --url and --api-key, or IMMICH_URL and IMMICH_API_KEY as environment variables or in a .env file (not needed with --scan-only)")
     if args.page_size < 1:
         parser.error("--page-size must be positive")
 
@@ -517,7 +593,7 @@ def main() -> int:
     copy_original_ini(root, output, picasa.ini_files)
     LOG.info("Found %d .picasa.ini files, %d folder metadata records, %d album definitions, %d image/video sections", len(picasa.ini_files), len(picasa.folders), len(picasa.albums), len(picasa.files))
 
-    api = ImmichAPI(args.url, args.api_key, args.timeout, not args.no_verify_tls)
+    api = ImmichAPI(args.url, args.api_key, args.timeout, not args.no_verify_tls, debug=args.debug_api)
     version = api.server_version()
     LOG.info("Immich server: %s", version or "version endpoint unavailable")
     LOG.info("Retrieving existing Immich assets (this may take a while)")

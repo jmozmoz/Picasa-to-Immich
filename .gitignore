@@ -1,0 +1,7 @@
+*.json
+backup/
+.ipynb_checkpoints/
+*.txt
+original_ini/
+.env
+__pycache__/
