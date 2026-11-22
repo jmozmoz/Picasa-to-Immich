@@ -500,6 +500,29 @@ separate from the Picasa collection.
     responses, migration may stop rather than silently use an incomplete
     asset inventory.
 
+## Development and tests
+
+The tests use [pytest](https://pytest.org) and never contact an Immich
+server: Immich is replaced by an in-memory fake, and Picasa folders are
+created in temporary directories. They also ignore any real `.env` file
+and `IMMICH_*` environment variables.
+
+``` bash
+python -m pip install pytest requests
+python -m pytest
+```
+
+| File | Covers |
+|---|---|
+| `tests/test_settings.py` | `.env` parsing and the priority of URL/API-key sources |
+| `tests/test_picasa.py` | Reading `.picasa.ini` files and scan-only output |
+| `tests/test_matching.py` | Matching local files to Immich assets |
+| `tests/test_immich_api.py` | API response parsing and pagination |
+| `tests/test_migration.py` | Dry run, `--apply` and the command line, end to end |
+
+The `test/` directory (singular) holds example output from a real run
+and is not part of the test suite.
+
 ## License
 
 No license is specified by this script. Add a license file and update
