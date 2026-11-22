@@ -15,7 +15,7 @@ import json
 import logging
 from pathlib import Path
 
-from . import settings
+from . import __version__, settings
 from .immich import ImmichAPI
 from .migration import run_migration
 from .scan_report import run_scan_only
@@ -24,8 +24,9 @@ LOG = logging.getLogger(__name__)
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="picasa_to_immich.py", description=__doc__,
+    parser = argparse.ArgumentParser(prog=settings.APP_NAME, description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument("source", type=Path, help="Root folder containing Picasa folders and .picasa.ini files")
     parser.add_argument("--output", type=Path, default=Path("picasa_migration"), help="Output/archive directory")
     parser.add_argument("--scan-only", action="store_true",
@@ -33,8 +34,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--url", help="Immich base URL, e.g. http://192.168.1.100:2283 (or IMMICH_URL in the environment or .env)")
     parser.add_argument("--api-key", help="API key (or IMMICH_API_KEY in the environment or .env)")
     parser.add_argument("--env-file", type=Path,
-                        help=f"File with IMMICH_URL / IMMICH_API_KEY lines (default: {settings.DEFAULT_ENV_FILE.name} "
-                             "next to picasa_to_immich.py, if present)")
+                        help="File with IMMICH_URL / IMMICH_API_KEY lines. Default: the first existing of "
+                             + " and ".join(str(p) for p in settings.default_env_files()))
     parser.add_argument("--apply", action="store_true", help="Actually create albums and add assets; default is dry-run")
     parser.add_argument("--allow-name-only", action="store_true", help="Allow unique filename-only matches (lower confidence)")
     parser.add_argument("--no-verify-tls", action="store_true", help="Disable TLS certificate verification")

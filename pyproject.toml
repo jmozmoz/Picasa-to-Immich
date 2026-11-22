@@ -1,3 +1,36 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "picasa-to-immich"
+dynamic = ["version"]
+description = "Migrate Picasa album memberships to an existing Immich library"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["requests>=2.20"]
+keywords = ["picasa", "immich", "photos", "albums", "migration"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Environment :: Console",
+    "Operating System :: OS Independent",
+    "Topic :: Multimedia :: Graphics",
+]
+# TODO before publishing: choose a license and add `license = "..."` and a LICENSE file.
+# Optionally add: authors = [{ name = "..." }] and [project.urls] Homepage = "..."
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[project.scripts]
+picasa-to-immich = "picasa_immich.cli:run"
+
+[tool.setuptools]
+packages = ["picasa_immich"]
+
+[tool.setuptools.dynamic]
+version = { attr = "picasa_immich.__version__" }
+
 [tool.pytest.ini_options]
 # Tests live in tests/; test/ holds example output and is not collected.
 testpaths = ["tests"]

@@ -1,0 +1,6 @@
+# Extra files for the source distribution (the wheel only contains picasa_immich/).
+include picasa_to_immich.py .env.example
+recursive-include tests *.py
+# Never ship example output (.env is never included: only listed files are).
+prune test
+prune backup

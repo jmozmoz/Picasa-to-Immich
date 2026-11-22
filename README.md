@@ -1,6 +1,6 @@
 # Picasa to Immich
 
-`picasa_to_immich.py` scans a directory tree containing Picasa metadata
+`picasa-to-immich` scans a directory tree containing Picasa metadata
 and can either:
 
 1.  **Export Picasa album membership** as lists of source-relative file
@@ -30,27 +30,25 @@ creates albums or adds existing Immich assets to albums.
     paths and to belong to multiple albums.
 -   Uses dry-run by default for Immich changes.
 
-## Requirements
+## Installation
 
-### Scan-only mode
+Requires Python 3.10 or newer. Install from the project folder (or,
+once published, from PyPI):
 
--   Python 3.10 or newer.
--   No third-party Python packages are required.
+``` bash
+python -m pip install .                  # from a checkout
+python -m pip install picasa-to-immich   # from PyPI, once published
+```
 
-### Immich migration mode
+This installs the `picasa-to-immich` command and its only dependency,
+`requests`. Check it with `picasa-to-immich --version`.
 
--   Python 3.10 or newer.
+Without installing, the same program can be run from a checkout with
+`python picasa_to_immich.py ...`. That needs `requests` only for Immich
+migration mode, not for `--scan-only`.
 
--   The `requests` package:
-
-    ``` bash
-    python -m pip install requests
-    ```
-
--   An Immich server URL and API key.
-
-The `requests` package is imported only when Immich migration mode is
-used. It is not needed for `--scan-only`.
+Immich migration mode also needs an Immich server URL and API key (see
+[Configuration](#configuration)).
 
 ## Input structure and Picasa metadata
 
@@ -96,13 +94,13 @@ Immich and does not require an API key.
 Basic usage:
 
 ``` bash
-python picasa_to_immich.py /path/to/picasa --scan-only
+picasa-to-immich /path/to/picasa --scan-only
 ```
 
 Choose an output directory:
 
 ``` bash
-python picasa_to_immich.py /path/to/picasa \
+picasa-to-immich /path/to/picasa \
     --scan-only \
     --output picasa_scan
 ```
@@ -193,24 +191,45 @@ Alternatively, pass `--url` and `--api-key` on the command line.
 #### Using a `.env` file
 
 Instead of environment variables, the values can be stored in a file
-named `.env` next to `picasa_to_immich.py`. Copy `.env.example` and
-fill in your values:
+named `.env`:
 
 ``` ini
 IMMICH_URL=http://immich-server:2283
 IMMICH_API_KEY=YOUR_API_KEY
 ```
 
-The file is read automatically if it exists. Use `--env-file PATH` to
-read a different file. Blank lines, `#` comments, an `export ` prefix
-and quoted values are accepted.
+Without `--env-file`, the program uses the **first** of these files
+that exists (only one file is read):
+
+1.  `.env` in the current working directory.
+2.  `.env` in your user configuration directory:
+
+    | System | Location |
+    |---|---|
+    | Windows | `%APPDATA%\picasa-to-immich\.env` |
+    | Linux | `$XDG_CONFIG_HOME/picasa-to-immich/.env`, default `~/.config/picasa-to-immich/.env` |
+    | macOS | `~/Library/Application Support/picasa-to-immich/.env` |
+
+The configuration directory is the usual place once the program is
+installed; create the folder if it does not exist. `picasa-to-immich
+--help` shows both paths for your system. Use `--env-file PATH` to
+read any other file. `.env.example` in the source checkout is a
+template. Blank lines, `#` comments, an `export ` prefix and quoted
+values are accepted.
+
+Windows (PowerShell):
+
+``` powershell
+New-Item -ItemType Directory -Force "$env:APPDATA\picasa-to-immich"
+notepad "$env:APPDATA\picasa-to-immich\.env"
+```
 
 If a value is given in more than one place, the command-line option
 wins, then the environment variable, then the `.env` file.
 
-`.env` is listed in `.gitignore` because it contains the API key. Do
-not commit it.
-^
+The file contains the API key: keep it private. In the source checkout
+`.env` is listed in `.gitignore` and is never included in the package.
+
 #### Creating the required API key
 
 1.    Log in to the Immich web interface.
@@ -238,7 +257,7 @@ No upload or delete permissions are required.
 ### Dry run (default)
 
 ``` bash
-python picasa_to_immich.py /path/to/picasa \
+picasa-to-immich /path/to/picasa \
     --url http://immich-server:2283 \
     --api-key YOUR_API_KEY
 ```
@@ -251,7 +270,7 @@ Review `migration_report.json` before applying changes.
 ### Apply changes
 
 ``` bash
-python picasa_to_immich.py /path/to/picasa \
+picasa-to-immich /path/to/picasa \
     --url http://immich-server:2283 \
     --api-key YOUR_API_KEY \
     --apply
@@ -339,13 +358,12 @@ Duplicate asset IDs are removed within each album.
 ## Command-line options
 
 ``` text
-usage: picasa_to_immich.py [-h] [--output OUTPUT] [--scan-only]
-                           [--url URL] [--api-key API_KEY] [--apply]
-                           [--allow-name-only] [--no-verify-tls]
-                           [--page-size PAGE_SIZE] [--timeout TIMEOUT]
-                           [--log-level {DEBUG,INFO,WARNING,ERROR}]
-                           [--env-file ENV_FILE] [--debug-api]
-                           source
+usage: picasa-to-immich [-h] [--version] [--output OUTPUT] [--scan-only]
+                        [--url URL] [--api-key API_KEY] [--env-file ENV_FILE]
+                        [--apply] [--allow-name-only] [--no-verify-tls]
+                        [--page-size PAGE_SIZE] [--timeout TIMEOUT]
+                        [--log-level {DEBUG,INFO,WARNING,ERROR}] [--debug-api]
+                        source
 ```
 
   -----------------------------------------------------------------------
@@ -395,8 +413,9 @@ usage: picasa_to_immich.py [-h] [--output OUTPUT] [--scan-only]
 
   `--env-file ENV_FILE`               File with `IMMICH_URL` and
                                       `IMMICH_API_KEY` lines. Default:
-                                      `.env` next to the script, if it
-                                      exists.
+                                      `.env` in the current directory,
+                                      else in the user configuration
+                                      directory (see above).
 
   `--debug-api`                       Log every Immich API request
                                       (method, URL, query, JSON body) and
@@ -441,7 +460,7 @@ copy the INI files into `original_ini/`.
     without involving Immich:
 
     ``` bash
-    python picasa_to_immich.py /path/to/picasa --scan-only
+    picasa-to-immich /path/to/picasa --scan-only
     ```
 
 3.  Inspect `album_file_list.txt` and `album_file_list.json`, especially
@@ -462,9 +481,12 @@ separate from the Picasa collection.
 
 -   **`Set --url and --api-key...`**: Immich migration mode requires
     both values. Use `--scan-only` to run without them.
--   **`No module named requests`**: Install the dependency with
-    `python -m pip install requests`. This is needed only for Immich
+-   **`No module named requests`**: Only when running
+    `picasa_to_immich.py` without installing. Install the dependency
+    with `python -m pip install requests`; it is needed only for Immich
     migration mode.
+-   **The `.env` file is not found**: Run `picasa-to-immich --help`;
+    the `--env-file` description lists the paths that are searched.
 -   **Files appear under `missingFiles`**: Check that the files exist
     and that the image section filename is relative to the directory
     containing its `.picasa.ini`.
@@ -504,9 +526,10 @@ separate from the Picasa collection.
 
 ### Code layout
 
-`picasa_to_immich.py` is only the entry point. The code is in the
-`picasa_immich` package next to it, so copy both when moving the
-tool to another machine.
+The code is in the `picasa_immich` package. `pyproject.toml` describes
+the distribution `picasa-to-immich` and its `picasa-to-immich` command
+(`picasa_immich.cli:run`). `picasa_to_immich.py` only runs the same
+command from a checkout without installing.
 
 | Module | Contents |
 |---|---|
@@ -527,7 +550,7 @@ created in temporary directories. They also ignore any real `.env` file
 and `IMMICH_*` environment variables.
 
 ``` bash
-python -m pip install pytest requests
+python -m pip install -e ".[test]"   # editable install with pytest
 python -m pytest
 ```
 
@@ -543,6 +566,21 @@ python -m pytest
 
 The `test/` directory (singular) holds example output from a real run
 and is not part of the test suite.
+
+### Building and publishing
+
+``` bash
+python -m pip install build twine
+python -m build             # creates dist/*.whl and dist/*.tar.gz
+python -m twine check dist/*
+python -m twine upload dist/*
+```
+
+The version is `__version__` in `picasa_immich/__init__.py`.
+`MANIFEST.in` adds the tests, `picasa_to_immich.py` and `.env.example`
+to the source archive and keeps `test/` and `backup/` out of it. Before
+the first upload, choose a license (see below) and add it to
+`pyproject.toml`.
 
 ## License
 

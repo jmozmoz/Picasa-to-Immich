@@ -10,3 +10,5 @@ Modules:
     migration    matching, album sync and migration reports
     cli          command-line interface
 """
+
+__version__ = "0.1.0"

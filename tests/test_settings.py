@@ -65,11 +65,33 @@ def test_default_env_file_is_optional():
     assert creds == settings.Credentials(None, None, None)
 
 
-def test_default_env_file_is_used_when_present(monkeypatch, tmp_path):
-    default = tmp_path / ".env"
-    default.write_text("IMMICH_URL=http://default\n", encoding="utf-8")
-    monkeypatch.setattr(settings, "DEFAULT_ENV_FILE", default)
-    assert settings.resolve_credentials(None, None, None, environ={}).url == "http://default"
+def test_first_existing_default_env_file_is_used(monkeypatch, tmp_path):
+    first, second, third = tmp_path / "a.env", tmp_path / "b.env", tmp_path / "c.env"
+    second.write_text("IMMICH_URL=http://second\n", encoding="utf-8")
+    third.write_text("IMMICH_URL=http://third\nIMMICH_API_KEY=third-key\n", encoding="utf-8")
+    monkeypatch.setattr(settings, "default_env_files", lambda: [first, second, third])
+    creds = settings.resolve_credentials(None, None, None, environ={})
+    # Only one file is read: values are not merged from later files.
+    assert (creds.url, creds.api_key, creds.env_file_used) == ("http://second", None, second)
+
+
+def test_default_env_files_are_cwd_then_config_dir(monkeypatch, tmp_path):
+    monkeypatch.undo()  # drop the conftest isolation for this test
+    monkeypatch.chdir(tmp_path)
+    files = settings.default_env_files()
+    assert files == [tmp_path / ".env", settings.user_config_dir() / ".env"]
+
+
+@pytest.mark.parametrize(("platform", "environ", "expected"), [
+    ("win32", {"APPDATA": "C:/Users/me/AppData/Roaming"}, "C:/Users/me/AppData/Roaming/picasa-to-immich"),
+    ("win32", {}, "/home/me/AppData/Roaming/picasa-to-immich"),
+    ("darwin", {}, "/home/me/Library/Application Support/picasa-to-immich"),
+    ("linux", {"XDG_CONFIG_HOME": "/xdg"}, "/xdg/picasa-to-immich"),
+    ("linux", {}, "/home/me/.config/picasa-to-immich"),
+])
+def test_user_config_dir(platform, environ, expected):
+    from pathlib import Path
+    assert settings.user_config_dir(environ, platform, home=Path("/home/me")) == Path(expected)
 
 
 def test_explicit_env_file_must_exist(tmp_path):
