@@ -61,6 +61,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--allow-name-only", action="store_true", help="Allow unique filename-only matches (lower confidence)"
     )
+    parser.add_argument(
+        "--no-album-description",
+        action="store_true",
+        help="Do not set a description (origin, Picasa description and location) on albums created in Immich",
+    )
     parser.add_argument("--no-verify-tls", action="store_true", help="Disable TLS certificate verification")
     parser.add_argument("--page-size", type=int, default=500, help="Immich search page size (default: 500)")
     parser.add_argument("--timeout", type=int, default=60)
@@ -115,7 +120,13 @@ def main(argv: list[str] | None = None) -> int:
     api = ImmichAPI(credentials.url, credentials.api_key, args.timeout, not args.no_verify_tls, debug=args.debug_api)
     run_dir = new_run_dir(output, "apply" if args.apply else "dryrun")
     report = run_migration(
-        api, root, run_dir, apply=args.apply, allow_name_only=args.allow_name_only, page_size=args.page_size
+        api,
+        root,
+        run_dir,
+        apply=args.apply,
+        allow_name_only=args.allow_name_only,
+        page_size=args.page_size,
+        describe_albums=not args.no_album_description,
     )
     LOG.info("Finished in %s mode", "APPLY" if args.apply else "DRY-RUN")
     LOG.info("Summary: %s", json.dumps(report["summary"], ensure_ascii=False))

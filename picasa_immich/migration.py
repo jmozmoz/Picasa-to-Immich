@@ -3,20 +3,35 @@
 from __future__ import annotations
 
 import logging
+import time
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
+from . import __version__
 from .immich import ImmichClient
 from .matching import AssetIndex, match_local_file
 from .picasa import PicasaLibrary
+from .settings import APP_NAME
 from .util import json_write, timestamp
 
 LOG = logging.getLogger(__name__)
 
 REPORT_VERSION = 2
 PICASA_EDIT_KEYS = ("backuphash", "rotate", "crop", "filters", "redo")
+# Every album description written by this program starts with this text.
+DESCRIPTION_PREFIX = f"Created by {APP_NAME}"
+
+
+def album_description(name: str, properties: Mapping[str, Any], today: str) -> str:
+    """Description for an album created by the migration: origin, plus Picasa description and location."""
+    lines = [f'{DESCRIPTION_PREFIX} {__version__} from Picasa album "{name}" on {today}.']
+    for key, label in (("description", "Picasa description"), ("location", "Picasa location")):
+        value = str(properties.get(key, "")).strip()
+        if value:
+            lines.append(f"{label}: {value}")
+    return "\n".join(lines)
 
 
 @dataclass
@@ -28,29 +43,31 @@ class MatchResults:
     counts: Counter = field(default_factory=Counter)
 
 
+@dataclass(frozen=True)
+class MigrationOptions:
+    """How a Migration runs; the defaults are a dry run with strict matching."""
+
+    apply: bool = False  # actually change Immich; otherwise only report the planned changes
+    allow_name_only: bool = False  # accept unique filename-only matches
+    page_size: int = 500  # Immich search page size
+    describe_albums: bool = True  # set a description on albums created in Immich
+
+
 class Migration:
     """One migration run of a Picasa library into Immich.
 
-    With apply=False (the default) nothing is changed in Immich; the planned
-    changes are only reported.
+    With options.apply=False (the default) nothing is changed in Immich; the
+    planned changes are only reported.
     """
 
     def __init__(
-        self,
-        api: ImmichClient,
-        library: PicasaLibrary,
-        output: Path,
-        *,
-        apply: bool = False,
-        allow_name_only: bool = False,
-        page_size: int = 500,
+        self, api: ImmichClient, library: PicasaLibrary, output: Path, options: MigrationOptions = MigrationOptions()
     ):
         self.api = api
         self.library = library
         self.output = output
-        self.apply = apply
-        self.allow_name_only = allow_name_only
-        self.page_size = page_size
+        self.options = options
+        self.today = time.strftime("%Y-%m-%d")
         self.warnings: list[dict[str, Any]] = list(library.warnings)
 
     def run(self) -> dict[str, Any]:
@@ -58,7 +75,7 @@ class Migration:
         version = self.api.server_version()
         LOG.info("Immich server: %s", version or "version endpoint unavailable")
         LOG.info("Retrieving existing Immich assets (this may take a while)")
-        index = AssetIndex(self.api.list_assets(self.page_size))
+        index = AssetIndex(self.api.list_assets(self.options.page_size))
         LOG.info("Retrieved %d Immich assets", len(index))
         existing_albums = self.api.list_albums()
 
@@ -81,7 +98,7 @@ class Migration:
                 results.entries.append({**base, "status": "unmatched", "reason": "local_file_not_found"})
                 results.counts["unmatched"] += 1
                 continue
-            match = match_local_file(local_path, index, self.allow_name_only)
+            match = match_local_file(local_path, index, self.options.allow_name_only)
             results.counts[match.status] += 1
             if not match.asset:
                 results.entries.append(
@@ -193,13 +210,13 @@ class Migration:
             elif existing:
                 self._update_existing_album(str(existing[0]["id"]), desired, report)
             else:
-                self._create_album(name, desired, report)
+                self._create_album(name, desired, album["properties"], report)
             reports.append(report)
         return reports
 
     def _update_existing_album(self, album_id: str, desired: list[str], report: dict[str, Any]) -> None:
         try:
-            present = self.api.album_asset_ids(album_id, self.page_size)
+            present = self.api.album_asset_ids(album_id, self.options.page_size)
         except (RuntimeError, OSError) as exc:  # HTTP error or network failure: skip this album
             self.warnings.append(
                 {"type": "album_membership_read_failed", "albumName": report["name"], "error": str(exc)}
@@ -210,15 +227,20 @@ class Migration:
         report["alreadyPresentAssetCount"] = len(desired) - len(missing)
         report["addedAssetIds"] = missing
         report["action"] = "add_missing_members" if missing else "already_complete"
-        if self.apply and missing:
+        if self.options.apply and missing:
             self.api.add_album_assets(album_id, missing)
             report["action"] = "updated_existing_album"
 
-    def _create_album(self, name: str, desired: list[str], report: dict[str, Any]) -> None:
+    def _create_album(
+        self, name: str, desired: list[str], properties: Mapping[str, Any], report: dict[str, Any]
+    ) -> None:
         report["addedAssetIds"] = desired
-        if not self.apply:
+        description = album_description(name, properties, self.today) if self.options.describe_albums else ""
+        if description:
+            report["description"] = description
+        if not self.options.apply:
             return
-        created = self.api.create_album(name, desired)
+        created = self.api.create_album(name, desired, description)
         if not isinstance(created, dict) or not created.get("id"):
             raise RuntimeError(f"Album creation response did not contain an id for {name!r}: {created!r}")
         report["immichAlbumId"] = str(created["id"])
@@ -239,7 +261,7 @@ class Migration:
         return {
             "scriptVersion": REPORT_VERSION,
             "createdAt": timestamp(),
-            "mode": "apply" if self.apply else "dry-run",
+            "mode": "apply" if self.options.apply else "dry-run",
             "immichServerVersion": version,
             "matches": matches.entries,
             "albums": albums,
@@ -276,6 +298,7 @@ def run_migration(
     apply: bool = False,
     allow_name_only: bool = False,
     page_size: int = 500,
+    describe_albums: bool = True,
 ) -> dict[str, Any]:
     """Scan root, archive the original INI files and run a Migration."""
     LOG.info("Scanning Picasa metadata under %s", root)
@@ -288,5 +311,7 @@ def run_migration(
         len(library.albums),
         len(library.files),
     )
-    migration = Migration(api, library, output, apply=apply, allow_name_only=allow_name_only, page_size=page_size)
-    return migration.run()
+    options = MigrationOptions(
+        apply=apply, allow_name_only=allow_name_only, page_size=page_size, describe_albums=describe_albums
+    )
+    return Migration(api, library, output, options).run()

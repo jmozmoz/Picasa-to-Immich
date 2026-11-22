@@ -18,7 +18,7 @@ class ImmichClient(Protocol):
     def list_assets(self, page_size: int) -> list[dict[str, Any]]: ...
     def list_albums(self) -> list[dict[str, Any]]: ...
     def album_asset_ids(self, album_id: str, page_size: int) -> set[str]: ...
-    def create_album(self, name: str, asset_ids: list[str]) -> Any: ...
+    def create_album(self, name: str, asset_ids: list[str], description: str = "") -> Any: ...
     def add_album_assets(self, album_id: str, asset_ids: list[str]) -> Any: ...
 
 
@@ -160,8 +160,11 @@ class ImmichAPI:
         body = {"size": page_size, "albumIds": [album_id]}
         return {str(item["id"]) for item in self.search_metadata(body) if item.get("id")}
 
-    def create_album(self, name: str, asset_ids: list[str]) -> Any:
-        return self.request("POST", "albums", json={"albumName": name, "assetIds": asset_ids})
+    def create_album(self, name: str, asset_ids: list[str], description: str = "") -> Any:
+        body: dict[str, Any] = {"albumName": name, "assetIds": asset_ids}
+        if description:
+            body["description"] = description
+        return self.request("POST", "albums", json=body)
 
     def add_album_assets(self, album_id: str, asset_ids: list[str]) -> Any:
         return self.request("PUT", f"albums/{album_id}/assets", json={"ids": asset_ids})

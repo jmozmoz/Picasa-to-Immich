@@ -1,10 +1,11 @@
 """End-to-end tests of migration mode and the command line, using a fake Immich."""
 
 import json
+import re
 
 import pytest
 
-from picasa_immich import cli, migration
+from picasa_immich import __version__, cli, migration
 from tests.helpers import FakeImmich, external_asset, only_run_dir, uploaded_asset
 
 
@@ -114,6 +115,48 @@ def test_apply_creates_and_updates_albums(picasa_tree, tmp_path):
     assert report["albums"][0]["immichAlbumId"] == "new-1"
 
 
+def test_album_description_text():
+    props = {"name": "Trip", "location": " Rome, Italy ", "description": "Summer holiday"}
+    assert migration.album_description("Trip", props, "2026-11-22") == (
+        f'Created by picasa-to-immich {__version__} from Picasa album "Trip" on 2026-11-22.\n'
+        "Picasa description: Summer holiday\n"
+        "Picasa location: Rome, Italy"
+    )
+    assert migration.album_description("Trip", {"location": "  "}, "2026-11-22").count("\n") == 0
+
+
+def test_created_albums_get_a_description(picasa_tree, tmp_path):
+    api = FakeImmich(inventory(), albums=[{"id": "alb-best", "albumName": "Best of"}])
+    report = migration.run_migration(api, picasa_tree, tmp_path / "out", apply=True)
+
+    pattern = r'Created by picasa-to-immich \S+ from Picasa album "Holiday 2020" on \d{4}-\d{2}-\d{2}\.'
+    assert re.fullmatch(pattern, api.descriptions["Holiday 2020"])
+    assert set(api.descriptions) == {"Holiday 2020", "Picasa album tok3"}  # not the existing "Best of"
+    by_token = {a["token"]: a for a in report["albums"]}
+    assert by_token["tok1"]["description"] == api.descriptions["Holiday 2020"]
+    assert "description" not in by_token["tok2"]
+
+
+def test_dry_run_reports_the_planned_description(picasa_tree, tmp_path):
+    report = migration.run_migration(FakeImmich(inventory()), picasa_tree, tmp_path / "out")
+    assert report["albums"][0]["description"].startswith(migration.DESCRIPTION_PREFIX)
+
+
+def test_album_description_can_be_disabled(picasa_tree, tmp_path):
+    api = FakeImmich(inventory())
+    report = migration.run_migration(api, picasa_tree, tmp_path / "out", apply=True, describe_albums=False)
+    assert set(api.descriptions.values()) == {""}
+    assert not any("description" in album for album in report["albums"])
+
+
+def test_main_no_album_description(picasa_tree, tmp_path, monkeypatch):
+    api = FakeImmich(inventory())
+    monkeypatch.setattr(cli, "ImmichAPI", lambda *args, **kwargs: api)
+    args = [str(picasa_tree), "--output", str(tmp_path / "out"), "--url", "http://x", "--api-key", "k"]
+    assert cli.main([*args, "--apply", "--no-album-description"]) == 0
+    assert api.created and set(api.descriptions.values()) == {""}
+
+
 def test_complete_album_is_left_alone(picasa_tree, tmp_path):
     api = FakeImmich(
         inventory(), albums=[{"id": "alb", "albumName": "Best of"}], members={"alb": {"asset-a", "asset-sub-a"}}
@@ -148,7 +191,7 @@ def test_duplicate_and_unreadable_albums_are_skipped(picasa_tree, tmp_path):
 
 def test_create_album_without_id_is_an_error(picasa_tree, tmp_path, monkeypatch):
     api = FakeImmich(inventory())
-    monkeypatch.setattr(api, "create_album", lambda name, asset_ids: {})
+    monkeypatch.setattr(api, "create_album", lambda *args: {})
     with pytest.raises(RuntimeError, match="did not contain an id"):
         migration.run_migration(api, picasa_tree, tmp_path / "out", apply=True)
 

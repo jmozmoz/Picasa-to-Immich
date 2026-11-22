@@ -287,6 +287,22 @@ by case-insensitive album name. If more than one Immich album has the
 same name, the script reports the ambiguity and does not choose one
 automatically.
 
+Albums created by the script get a description that records where they
+came from, plus the Picasa album description and location if they exist:
+
+``` text
+Created by picasa-to-immich 0.2.0 from Picasa album "Holiday 2020" on 2026-11-22.
+Picasa location: Rome, Italy
+```
+
+The first line always starts with `Created by picasa-to-immich`, so these
+albums are easy to find later. The dry-run report shows the planned
+description for each album to be created. Existing albums keep their
+description unchanged; which assets the script added to them is recorded
+in the `migration_report.json` of the apply run (see
+[Output folders](#output-folders)). Use `--no-album-description` to
+create albums without a description.
+
 ### Asset matching
 
 For each local image/video entry, the script calculates its SHA-1
@@ -365,8 +381,9 @@ Duplicate asset IDs are removed within each album.
 ``` text
 usage: picasa-to-immich [-h] [--version] [--output OUTPUT] [--scan-only]
                         [--url URL] [--api-key API_KEY] [--env-file ENV_FILE]
-                        [--apply] [--allow-name-only] [--no-verify-tls]
-                        [--page-size PAGE_SIZE] [--timeout TIMEOUT]
+                        [--apply] [--allow-name-only] [--no-album-description]
+                        [--no-verify-tls] [--page-size PAGE_SIZE]
+                        [--timeout TIMEOUT]
                         [--log-level {DEBUG,INFO,WARNING,ERROR}] [--debug-api]
                         source
 ```
@@ -401,6 +418,10 @@ usage: picasa-to-immich [-h] [--version] [--output OUTPUT] [--scan-only]
 
   `--allow-name-only`                 Allow unique filename-only matches
                                       as lower-confidence matches.
+
+  `--no-album-description`            Create albums without the
+                                      description that records their
+                                      Picasa origin.
 
   `--no-verify-tls`                   Disable TLS certificate
                                       verification. Use only when

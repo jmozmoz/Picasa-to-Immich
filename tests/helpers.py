@@ -53,6 +53,7 @@ class FakeImmich:
         self.failing_albums = set(failing_albums)
         self.created: list[tuple[str, list[str]]] = []
         self.added: list[tuple[str, list[str]]] = []
+        self.descriptions: dict[str, str] = {}  # album name -> description given on creation
 
     def server_version(self):
         return "fake"
@@ -68,8 +69,9 @@ class FakeImmich:
             raise RuntimeError("read failed")
         return set(self.members.get(album_id, set()))
 
-    def create_album(self, name, asset_ids):
+    def create_album(self, name, asset_ids, description=""):
         self.created.append((name, list(asset_ids)))
+        self.descriptions[name] = description
         return {"id": f"new-{len(self.created)}"}
 
     def add_album_assets(self, album_id, asset_ids):

@@ -108,11 +108,13 @@ def test_server_version_unavailable():
 
 
 def test_album_write_requests():
-    api = ScriptedAPI([{"id": "new"}, None])
+    api = ScriptedAPI([{"id": "new"}, {"id": "new2"}, None])
     api.create_album("Trip", ["a"])
+    api.create_album("Trip 2", ["a"], "From Picasa")
     api.add_album_assets("alb", ["b"])
     assert api.calls == [
         ("POST", "albums", {"albumName": "Trip", "assetIds": ["a"]}, None),
+        ("POST", "albums", {"albumName": "Trip 2", "assetIds": ["a"], "description": "From Picasa"}, None),
         ("PUT", "albums/alb/assets", {"ids": ["b"]}, None),
     ]
 
