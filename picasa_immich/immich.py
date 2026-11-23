@@ -69,15 +69,25 @@ class ImmichAPI:
             return response.text
 
     def server_version(self) -> str | None:
+        """The Immich server version, e.g. "3.4.2", or None if no version endpoint answers."""
         for endpoint in ("server/version", "server/about"):
             try:
                 value = self.request("GET", endpoint)
             except (RuntimeError, OSError):  # HTTP error or network failure: try the next endpoint
                 continue
-            if isinstance(value, dict):
-                return str(value.get("version") or value.get("serverVersion") or value)
-            return str(value)
+            return self._format_version(value)
         return None
+
+    @staticmethod
+    def _format_version(value: Any) -> str:
+        """server/version returns {"major", "minor", "patch", "prerelease"?, ...}; server/about has "version"."""
+        if not isinstance(value, dict):
+            return str(value)
+        if all(isinstance(value.get(key), int) for key in ("major", "minor", "patch")):
+            version = f"{value['major']}.{value['minor']}.{value['patch']}"
+            prerelease = value.get("prerelease")
+            return f"{version}-{prerelease}" if prerelease else version
+        return str(value.get("version") or value.get("serverVersion") or value)
 
     @staticmethod
     def _extract_items(payload: Any) -> tuple[list[dict[str, Any]], bool]:

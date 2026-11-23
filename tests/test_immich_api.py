@@ -103,6 +103,19 @@ def test_server_version_falls_back_to_second_endpoint():
     assert api.server_version() == "1.2.3"
 
 
+@pytest.mark.parametrize(
+    ("response", "expected"),
+    [
+        ({"major": 3, "minor": 4, "patch": 2, "prerelease": None, "featureLevel": 2}, "3.4.2"),
+        ({"major": 3, "minor": 5, "patch": 0, "prerelease": "rc.1"}, "3.5.0-rc.1"),
+        ({"version": "v1.106.4", "versionUrl": "https://example.org"}, "v1.106.4"),
+        ("1.2.3", "1.2.3"),
+    ],
+)
+def test_server_version_formats(response, expected):
+    assert ScriptedAPI([response]).server_version() == expected
+
+
 def test_server_version_unavailable():
     assert ScriptedAPI([RuntimeError("a"), RuntimeError("b")]).server_version() is None
 
