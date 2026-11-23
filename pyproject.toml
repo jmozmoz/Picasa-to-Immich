@@ -19,7 +19,12 @@ classifiers = [
     "Operating System :: OS Independent",
     "Topic :: Multimedia :: Graphics",
 ]
-# Optionally add: authors = [{ name = "..." }] and [project.urls] Homepage = "..."
+authors = [{ name = "jmozmoz" }]
+
+[project.urls]
+Homepage = "https://github.com/jmozmoz/Picasa-to-Immich"
+Source = "https://github.com/jmozmoz/Picasa-to-Immich"
+Issues = "https://github.com/jmozmoz/Picasa-to-Immich/issues"
 
 [project.optional-dependencies]
 test = ["pytest>=7"]
