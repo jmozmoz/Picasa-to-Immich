@@ -605,6 +605,10 @@ python -m pip install -e ".[test]"   # editable install with pytest
 python -m pytest
 ```
 
+On GitHub, `.github/workflows/tests.yml` runs all tests, including the
+code-style checks, for every push and pull request: with Python 3.10 and
+the latest Python on Linux, and the latest Python on Windows.
+
 | File | Covers |
 |---|---|
 | `tests/test_util.py` | Per-run output folders |
